@@ -1,5 +1,7 @@
 ;;; xr.el --- Convert string regexp to rx notation   -*- lexical-binding: t -*-
 
+;; Copyright (C) 2019 Free Software Foundation, Inc.
+
 ;; Author: Mattias Engdegård <mattiase at acm dot org>
 ;; Version: 1.0
 ;; Keywords: lisp, maint, regexps
