@@ -262,7 +262,7 @@
 
        ;; * ? + (and non-greedy variants)
        ;; - not special at beginning of sequence or after ^
-       ((and (looking-at (rx (group (any "*?+")) (opt "?")))
+       ((and (looking-at (rx (any "*?+") (opt "?")))
              sequence (not (eq (car sequence) 'bol)))
         (let ((operator (match-string 0)))
           (goto-char (match-end 0))
