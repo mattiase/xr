@@ -74,7 +74,7 @@
                            '(ascii alnum alpha blank cntrl digit graph
                              lower multibyte nonascii print punct space
                              unibyte upper word xdigit)))
-            (error "no such character class: %s" sym))
+            (error "No such character class: %s" sym))
           (push sym set)
           (goto-char (match-end 0))))
        ;; character range
@@ -88,7 +88,7 @@
           (push range set)
           (goto-char (match-end 0))))
        ((looking-at (rx eos))
-        (error "unterminated character alternative"))
+        (error "Unterminated character alternative"))
        ;; plain character (including ^ or -)
        (t
         (let* ((ch (following-char))
@@ -180,7 +180,7 @@
                      (?y . cyrillic)                          
                      (?| . can-break)))))
     (when (not sym)
-      (error "unknown category code: %s" category-code))
+      (error "Unknown category code: %s" category-code))
     (let ((item (list 'category (cdr sym))))
       (if negated (list 'not item) item))))
 
@@ -203,7 +203,7 @@
                      (?|  . string-delimiter)
                      (?!  . comment-delimiter)))))
     (when (not sym)
-      (error "unknown syntax code: %s" syntax-code))
+      (error "Unknown syntax code: %s" syntax-code))
     (let ((item (list 'syntax (cdr sym))))
       (if negated (list 'not item) item))))
 
@@ -289,7 +289,7 @@
                                     (if comma upper lower)
                                     (car sequence))
                                    (cdr sequence))))
-          (error "invalid \\{\\} syntax")))
+          (error "Invalid \\{\\} syntax")))
 
        ;; nonspecial character
        ((looking-at (rx (not (any "\\.["))))
@@ -315,7 +315,7 @@
                               (cdr group)
                             (list group))))
             (when (not (looking-at (rx "\\)")))
-              (error "missing \\)"))
+              (error "Missing \\)"))
             (forward-char 2)
             (let ((item (cond ((not question)           ; plain subgroup
                                (cons 'group operand))
@@ -368,7 +368,7 @@
         (forward-char 2)
         (push (match-string 1) sequence))
 
-       (t (error "backslash at end of regexp"))))
+       (t (error "Backslash at end of regexp"))))
 
     (let ((item-seq (xr--rev-join-seq sequence)))
       (cond ((null item-seq)
@@ -402,7 +402,7 @@ equivalent to RE-STRING."
     (goto-char (point-min))
     (let ((rx (xr--parse-alt)))
       (when (looking-at (rx "\\)"))
-        (error "unbalanced \\)"))
+        (error "Unbalanced \\)"))
       rx)))
 
 ;; Print a rx expression to a string, unformatted.
