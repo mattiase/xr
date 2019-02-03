@@ -85,8 +85,14 @@
           ;; become (97 . 122) when printed.
           ;; TODO: Possibly convert "[0-9]" to digit, and
           ;; "[0-9a-fA-F]" (and permutations) to hex-digit.
-          (push range set)
-          (goto-char (match-end 0))))
+          (goto-char (match-end 0))
+          (let ((prev (car set)))
+            ;; Merge with preceding range if any.
+            (if (and (stringp prev)
+                     (>= (length prev) 3)
+                     (eq (aref prev 1) ?-))
+                (setq set (cons (concat prev range) (cdr set)))
+              (push range set)))))
        ((looking-at (rx eos))
         (error "Unterminated character alternative"))
        ;; plain character (including ^ or -)
@@ -599,7 +605,9 @@ Returns nil."
   (xr--expect "[a-z-+/*%0-4[:xdigit:]]"
               '(any "a-z" "-" "+/*%" "0-4" xdigit))
   (xr--expect "[^]A-Za-z-]*"
-              '(zero-or-more (not (any "]" "A-Z" "a-z" "-"))))
+              '(zero-or-more (not (any "]" "A-Za-z" "-"))))
+  (xr--expect "[+*%A-Ka-k0-3${-}]"
+              '(any "+*%" "A-Ka-k0-3" "$" "{-}"))
   (xr--expect ""
               "")
   (xr--expect "a\\|"
