@@ -2,7 +2,7 @@
 
 ;; Copyright (C) 2019 Free Software Foundation, Inc.
 
-;; Author: Mattias Engdegård <mattiase at acm dot org>
+;; Author: Mattias Engdegård <mattiase@acm.org>
 ;; Version: 1.0
 ;; Keywords: lisp, maint, regexps
 
@@ -49,6 +49,10 @@
 ;; `not-newline'.  The user is encouraged to edit the result for
 ;; maximum readability, consistency and personal preference when
 ;; replacing existing regexps in elisp code.
+
+;; Similar functionality is provided by the `lex' package in the form of the
+;; `lex-parse-re' function, but `xr' does not depend on `lex' and does
+;; a more thorough job of handling all corner cases of Elisp's regexp syntax.
 
 ;;; Code:
 
@@ -500,7 +504,18 @@ Returns nil."
   "Verify (xr--pp-rx-to-str RX) against EXPECTED-STR."
   (xr--expect-result 'xr--pp-rx-to-str rx expected-str))
 
+(provide 'xr)
+
 (eval-when-compile
+  ;; FIXME: When byte-compiling the file, this `eval-when-compile' block
+  ;; will be executed at a time where the above functions have been compiled
+  ;; but they're not necessarily known by the current Emacs session yet
+  ;; (because the neither `xr.el' nor `xr.elc' has been loaded yet).
+  ;; As a quick fix, we (require 'xr) here to load the `xr' file (and fail
+  ;; silently if the file is not in `load-path').
+  ;; Maybe a better fix is to move those tests to a separate file, and/or
+  ;; to wrap them in an `ert-deftest'.
+  (when (require 'xr nil 'noerror)
   (xr--expect "a\\$b\\\\c\\[\\]\\q"
               "a$b\\c[]q")
   (xr--expect "\\(?:ab\\|c*d\\)?"
@@ -660,8 +675,6 @@ Returns nil."
                  "(?? nonl)\n")
   (xr--expect-pp '(repeat 1 63 "a")
                  "(repeat 1 63 \"a\")\n")
-  )
-
-(provide 'xr)
+  ))
 
 ;;; xr.el ends here
