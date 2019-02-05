@@ -313,12 +313,16 @@
           (push (xr--parse-char-alt negated) sequence)))
 
        ;; group
-       ((looking-at (rx "\\("
-                        (opt (group "?" (group (zero-or-more digit)) ":"))))
+       ((looking-at (rx "\\(" (opt (group "?")
+                                   (opt (opt (group (any "1-9")
+                                                    (zero-or-more digit)))
+                                        (group ":")))))
         (let ((question (match-string 1))
               (number (match-string 2))
-              (end (match-end 0)))
-          (goto-char end)
+              (colon (match-string 3)))
+          (when (and question (not colon))
+            (error "Invalid \\(? syntax"))
+          (goto-char (match-end 0))
           (let* ((group (xr--parse-alt))
                  ;; simplify - group has an implicit seq
                  (operand (if (and (listp group) (eq (car group) 'seq))
@@ -327,17 +331,17 @@
             (when (not (looking-at (rx "\\)")))
               (error "Missing \\)"))
             (forward-char 2)
-            (let ((item (cond ((not question)           ; plain subgroup
-                               (cons 'group operand))
-                              ((zerop (length number))  ; shy group
-                               group)
-                              (t
+            (let ((item (cond (number   ; numbered group
                                (append (list 'group-n (string-to-number number))
-                                       operand)))))
+                                       operand))
+                              (question ; shy group
+                               group)
+                              (t        ; plain group
+                               (cons 'group operand)))))
               (push item sequence)))))
 
        ;; back-reference
-       ((looking-at (rx "\\" (group digit)))
+       ((looking-at (rx "\\" (group (any "1-9"))))
         (forward-char 2)
         (push (list 'backref (string-to-number (match-string 1)))
               sequence))
