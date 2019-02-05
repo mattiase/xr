@@ -3,7 +3,7 @@
 ;; Copyright (C) 2019 Free Software Foundation, Inc.
 
 ;; Author: Mattias Engdegård <mattiase@acm.org>
-;; Version: 1.0
+;; Version: 1.1
 ;; Keywords: lisp, maint, regexps
 
 ;; This program is free software; you can redistribute it and/or modify
@@ -464,9 +464,9 @@ equivalent to RE-STRING."
             "\""))
    (t (prin1-to-string rx))))
 
-;; Pretty-print a regexp (in rx notation) to a string.
-;; It does a slightly better job than standard `pp' for rx purposes.
-(defun xr--pp-rx-to-str (rx)
+(defun xr-pp-rx-to-str (rx)
+  "Pretty-print the regexp RX (in rx notation) to a string.
+It does a slightly better job than standard `pp' for rx purposes."
   (with-temp-buffer
     (insert (xr--rx-to-string rx) "\n")
     (pp-buffer)
@@ -487,10 +487,10 @@ equivalent to RE-STRING."
 ;;;###autoload
 (defun xr-pp (re-string)
   "Convert to `rx' notation and pretty-print.
-This basically does `(pp (rx RE-STRING))', but in a slightly more readable
+This basically does `(pp (xr RE-STRING))', but in a slightly more readable
 way.  It is intended for use from an interactive elisp session.
 Returns nil."
-  (insert (xr--pp-rx-to-str (xr re-string))))
+  (insert (xr-pp-rx-to-str (xr re-string))))
 
 (provide 'xr)
 

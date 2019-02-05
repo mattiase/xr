@@ -222,11 +222,11 @@
   )
 
 (ert-deftest xr-pretty ()
-  (should (equal (xr--pp-rx-to-str "A\e\r\n\t\0 \x7f\x80\ B\xff\x02")
+  (should (equal (xr-pp-rx-to-str "A\e\r\n\t\0 \x7f\x80\ B\xff\x02")
                  "\"A\\e\\r\\n\\t\\x00 \\x7f\\200B\\xff\\x02\"\n"))
-  (should (equal (xr--pp-rx-to-str '(?? nonl))
+  (should (equal (xr-pp-rx-to-str '(?? nonl))
                  "(?? nonl)\n"))
-  (should (equal (xr--pp-rx-to-str '(repeat 1 63 "a"))
+  (should (equal (xr-pp-rx-to-str '(repeat 1 63 "a"))
                  "(repeat 1 63 \"a\")\n"))
   )
 
