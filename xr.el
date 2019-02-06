@@ -50,9 +50,17 @@
 ;; maximum readability, consistency and personal preference when
 ;; replacing existing regexps in elisp code.
 
-;; Similar functionality is provided by the `lex' package in the form of the
-;; `lex-parse-re' function, but `xr' does not depend on `lex' and does
-;; a more thorough job of handling all corner cases of Elisp's regexp syntax.
+;; Related work:
+;;
+;; The `lex' package, a lexical analyser generator, provides the
+;; `lex-parse-re' function which performs a similar task, but does not
+;; attempt to handle all the edge cases of Elisp's regexp syntax or
+;; pretty-print the result.
+;;
+;; The `pcre2el' package, a regexp syntax converter and interactive regexp
+;; explainer, could also be used for the same tasks. `xr' is narrower in
+;; scope but more accurate for the purpose of parsing Emacs regexps and
+;; printing the results in rx form.
 
 ;;; Code:
 
