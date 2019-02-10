@@ -198,7 +198,7 @@
                      (?y . cyrillic)                          
                      (?| . can-break)))))
     (when (not sym)
-      (error "Unknown category code: %s" category-code))
+      (error "Unknown category code: %c" category-code))
     (let ((item (list 'category (cdr sym))))
       (if negated (list 'not item) item))))
 
@@ -221,7 +221,7 @@
                      (?|  . string-delimiter)
                      (?!  . comment-delimiter)))))
     (when (not sym)
-      (error "Unknown syntax code: %s" syntax-code))
+      (error "Unknown syntax code: %c" syntax-code))
     (let ((item (list 'syntax (cdr sym))))
       (if negated (list 'not item) item))))
 
