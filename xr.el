@@ -356,7 +356,7 @@
 
        ;; various simple substitutions
        ((looking-at (rx (or "." "\\w" "\\W" "\\`" "\\'" "\\="
-                            "\\b" "\\B" "\\<" "\\>" "\\_<" "\\_>")))
+                            "\\b" "\\B" "\\<" "\\>")))
         (goto-char (match-end 0))
         (let ((sym (cdr (assoc
                          (match-string 0)
@@ -365,9 +365,17 @@
                            ("\\`" . bos) ("\\'" . eos)
                            ("\\=" . point)
                            ("\\b" . word-boundary) ("\\B" . not-word-boundary)
-                           ("\\<" . bow) ("\\>" . eow)
-                           ("\\_<" . symbol-start) ("\\_>" . symbol-end))))))
+                           ("\\<" . bow) ("\\>" . eow))))))
           (push sym sequence)))
+
+       ;; symbol-start, symbol-end
+       ((looking-at (rx "\\_" (opt (group (any "<>")))))
+        (let ((arg (match-string 1)))
+          (unless arg
+            (error "Invalid \\_ sequence"))
+          (forward-char 3)
+          (push (if (string-equal arg "<") 'symbol-start 'symbol-end)
+                sequence)))
 
        ;; character syntax
        ((looking-at (rx "\\" (group (any "sS")) (group anything)))

@@ -75,6 +75,7 @@
                  '(seq bol nonl wordchar not-wordchar bos eos point
                        word-boundary not-word-boundary bow eow
                        symbol-start symbol-end eol)))
+  (should-error (xr "\\_a"))
   )
 
 (ert-deftest xr-syntax ()
