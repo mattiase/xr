@@ -197,10 +197,10 @@
                      (?w . hebrew)                            
                      (?y . cyrillic)                          
                      (?| . can-break)))))
-    (when (not sym)
-      (error "Unknown category code: %c" category-code))
-    (let ((item (list 'category (cdr sym))))
-      (if negated (list 'not item) item))))
+    (if sym
+        (let ((item (list 'category (cdr sym))))
+          (if negated (list 'not item) item))
+      (list 'regexp (format "\\%c%c" (if negated ?C ?c) category-code)))))
 
 (defun xr--char-syntax (negated syntax-code)
   (let ((sym (assq syntax-code
@@ -208,7 +208,7 @@
                      (?\s . whitespace)
                      (?.  . punctuation)
                      (?w  . word)
-                     (?W  . word)	; undocumented
+                     (?W  . word)       ; undocumented
                      (?_  . symbol)
                      (?\( . open-parenthesis)
                      (?\) . close-parenthesis)

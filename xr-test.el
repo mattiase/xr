@@ -81,7 +81,7 @@
 (ert-deftest xr-syntax ()
   (should (equal (xr "\\s-\\s \\sw\\sW\\s_\\s.\\s(\\s)\\s\"")
                  '(seq (syntax whitespace) (syntax whitespace) (syntax word)
-		       (syntax word)
+                       (syntax word)
                        (syntax symbol) (syntax punctuation)
                        (syntax open-parenthesis) (syntax close-parenthesis)
                        (syntax string-quote))))
@@ -124,6 +124,8 @@
   (should (equal (xr "\\C2\\C^")
                  '(seq (not (category upper-diacritical-mark))
                        (not (category combining-diacritic)))))
+  (should (equal (xr "\\c%\\C+")
+                 '(seq (regexp "\\c%") (regexp "\\C+"))))
   )
 
 (ert-deftest xr-lazy ()
