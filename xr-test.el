@@ -79,8 +79,9 @@
   )
 
 (ert-deftest xr-syntax ()
-  (should (equal (xr "\\s-\\s \\sw\\s_\\s.\\s(\\s)\\s\"")
+  (should (equal (xr "\\s-\\s \\sw\\sW\\s_\\s.\\s(\\s)\\s\"")
                  '(seq (syntax whitespace) (syntax whitespace) (syntax word)
+		       (syntax word)
                        (syntax symbol) (syntax punctuation)
                        (syntax open-parenthesis) (syntax close-parenthesis)
                        (syntax string-quote))))

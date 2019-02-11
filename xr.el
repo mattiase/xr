@@ -208,6 +208,7 @@
                      (?\s . whitespace)
                      (?.  . punctuation)
                      (?w  . word)
+                     (?W  . word)	; undocumented
                      (?_  . symbol)
                      (?\( . open-parenthesis)
                      (?\) . close-parenthesis)
