@@ -158,7 +158,9 @@
 
 (defun xr--char-category (negated category-code)
   (let ((sym (assq category-code
-                   '((?0 . consonant)
+                   '((?\s . space-for-indent)
+                     (?. . base)
+                     (?0 . consonant)
                      (?1 . base-vowel)                        
                      (?2 . upper-diacritical-mark)            
                      (?3 . lower-diacritical-mark)            
@@ -176,7 +178,9 @@
                      (?H . japanese-hiragana-two-byte)        
                      (?I . indian-two-byte)                   
                      (?K . japanese-katakana-two-byte)        
+                     (?L . strong-left-to-right)
                      (?N . korean-hangul-two-byte)            
+                     (?R . strong-right-to-left)
                      (?Y . cyrillic-two-byte)         
                      (?^ . combining-diacritic)               
                      (?a . ascii)                             
