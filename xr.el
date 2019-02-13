@@ -86,7 +86,7 @@
                            '(ascii alnum alpha blank cntrl digit graph
                              lower multibyte nonascii print punct space
                              unibyte upper word xdigit)))
-            (error "No such character class: %s" sym))
+            (error "No character class `%s'" sym))
           (push sym set)
           (goto-char (match-end 0))))
        ;; character range
@@ -226,7 +226,7 @@
                      (?|  . string-delimiter)
                      (?!  . comment-delimiter)))))
     (when (not sym)
-      (error "Unknown syntax code: %c" syntax-code))
+      (error "Unknown syntax code `%c'" syntax-code))
     (let ((item (list 'syntax (cdr sym))))
       (if negated (list 'not item) item))))
 
@@ -383,18 +383,24 @@
                 sequence)))
 
        ;; character syntax
-       ((looking-at (rx "\\" (group (any "sS")) (group anything)))
+       ((looking-at (rx "\\" (group (any "sS")) (opt (group anything))))
         (let ((negated (string-equal (match-string 1) "S"))
-              (syntax-code (string-to-char (match-string 2))))
+              (syntax-code (match-string 2)))
+          (unless syntax-code
+            (error "Incomplete \\%s sequence" (match-string 1)))
           (goto-char (match-end 0))
-          (push (xr--char-syntax negated syntax-code) sequence)))
+          (push (xr--char-syntax negated (string-to-char syntax-code))
+                sequence)))
 
        ;; character categories
-       ((looking-at (rx "\\" (group (any "cC")) (group anything)))
+       ((looking-at (rx "\\" (group (any "cC")) (opt (group anything))))
         (let ((negated (string-equal (match-string 1) "C"))
-              (category-code (string-to-char (match-string 2))))
+              (category-code (match-string 2)))
+          (unless category-code
+            (error "Incomplete \\%s sequence" (match-string 1)))
           (goto-char (match-end 0))
-          (push (xr--char-category negated category-code) sequence)))
+          (push (xr--char-category negated (string-to-char category-code))
+                sequence)))
 
        ;; Escaped character. Only \*+?.^$[ really need escaping, but we accept
        ;; any not otherwise handled character after the backslash since
