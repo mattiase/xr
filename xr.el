@@ -287,9 +287,7 @@
        ;; - not special at beginning of sequence or after ^
        ((and (looking-at (rx (any "*?+") (opt "?")))
              sequence
-             (not (and (eq (car sequence) 'bol)
-                       (string-equal (buffer-substring (1- (point)) (point))
-                                     "^"))))
+             (not (and (eq (car sequence) 'bol) (eq (preceding-char) ?^))))
         (let ((operator (match-string 0)))
           (goto-char (match-end 0))
           (setq sequence (cons (xr--postfix operator (car sequence))
@@ -298,9 +296,7 @@
        ;; \{..\} - not special at beginning of sequence or after ^
        ((and (looking-at (rx "\\{"))
              sequence
-             (not (and (eq (car sequence) 'bol)
-                       (string-equal (buffer-substring (1- (point)) (point))
-                                     "^"))))
+             (not (and (eq (car sequence) 'bol) (eq (preceding-char) ?^))))
         (forward-char 2)
         (if (looking-at (rx (opt (group (one-or-more digit)))
                             (opt (group ",")
