@@ -433,7 +433,7 @@
        ;; Escaped character. Only \*+?.^$[ really need escaping, but we accept
        ;; any not otherwise handled character after the backslash since
        ;; such sequences are found in the wild.
-       ((looking-at (rx "\\" (group (or (any "\\*+?.^$")
+       ((looking-at (rx "\\" (group (or (any "\\*+?.^$[")
                                         (group anything)))))
         (forward-char 2)
         (push (match-string 1) sequence)
