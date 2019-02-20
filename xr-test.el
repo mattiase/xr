@@ -254,6 +254,27 @@
                  "(repeat 1 63 \"a\")\n"))
   )
 
+(ert-deftest xr-lint ()
+  (should (equal (xr-lint "^a*\\(b\\{3\\}\\|c\\)[^]\\a-d^-]$")
+                 nil))
+  (should (equal (xr-lint "a^b$c")
+                 '((1 . "Unescaped literal `^'")
+                   (3 . "Unescaped literal `$'"))))
+  (should (equal (xr-lint "^**$")
+                 '((1 . "Unescaped literal `*'"))))
+  (should (equal (xr-lint "a[\\\\[]")
+                 '((2 . "Escaped `\\' inside character alternative"))))
+  (should (equal (xr-lint "\\{\\(+\\|?\\)\\}")
+                 '((0 . "Escaped non-special character `{'")
+                   (4 . "Unescaped literal `+'")
+                   (7 . "Unescaped literal `?'")
+                   (10 . "Escaped non-special character `}'"))))
+  (should (equal (xr-lint "\\}\\w\\a\\b\\%")
+                 '((0 . "Escaped non-special character `}'")
+                   (4 . "Escaped non-special character `a'")
+                   (8 . "Escaped non-special character `%'"))))
+  )
+
 (provide 'xr-test)
 
 ;;; xr-test.el ends here

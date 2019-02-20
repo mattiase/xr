@@ -30,8 +30,13 @@
 ;;   
 ;; Please refer to `rx' for more information about the notation.
 ;;
-;; The exported functions are `xr', which simply returns the converted
-;; rx expression, and `xr-pp', which pretty-prints the rx expression.
+;; The exported functions are:
+;;
+;;  `xr'              - returns the converted rx expression
+;;  `xr-pp'           - pretty-prints the converted rx expression
+;;  `xr-lint'         - finds deprecated syntax in a regexp string
+;;  `xr-pp-rx-to-str' - pretty-prints an rx expression to a string
+;;
 ;; Suggested use is from an interactive elisp buffer.
 ;;
 ;; Example (regexp found in compile.el):
@@ -66,7 +71,12 @@
 
 (require 'rx)
 
-(defun xr--parse-char-alt (negated)
+;; Add the report MESSAGE at POSITION to WARNINGS.
+(defun xr--report (warnings position message)
+  (when warnings
+    (push (cons (1- position) message) (car warnings))))
+
+(defun xr--parse-char-alt (negated warnings)
   (let ((set nil))
     (cond
      ;; Initial ]-x range
@@ -111,6 +121,11 @@
        (t
         (let* ((ch (following-char))
                (ch-str (char-to-string ch)))
+          (when (and (eq ch ?\\)
+                     (stringp (car set))
+                     (string-match "\\\\\\'" (car set)))
+            (xr--report warnings (1- (point))
+                        "Escaped `\\' inside character alternative"))
           ;; Merge with the previous string if neither contains "-".
           (if (and (stringp (car set))
                    (not (eq ch ?-))
@@ -269,29 +284,40 @@
                  (list operand))))
     (append operator body)))
   
-(defun xr--parse-seq ()
+(defun xr--parse-seq (warnings)
   (let ((sequence nil))                 ; reversed
     (while (not (looking-at (rx (or "\\|" "\\)" eos))))
       (cond
        ;; ^ - only special at beginning of sequence
-       ((and (looking-at (rx "^")) (null sequence))
+       ((looking-at (rx "^"))
         (forward-char 1)
-        (push 'bol sequence))
+        (if (null sequence)
+            (push 'bol sequence)
+          (xr--report warnings (match-beginning 0) "Unescaped literal `^'")
+          (push "^" sequence)))
 
        ;; $ - only special at end of sequence
-       ((looking-at (rx "$" (or "\\|" "\\)" eos)))
+       ((looking-at (rx "$"))
         (forward-char 1)
-        (push 'eol sequence))
+        (if (looking-at (rx (or "\\|" "\\)" eos)))
+            (push 'eol sequence)
+          (xr--report warnings (match-beginning 0) "Unescaped literal `$'")
+          (push "$" sequence)))
 
        ;; * ? + (and non-greedy variants)
        ;; - not special at beginning of sequence or after ^
-       ((and (looking-at (rx (any "*?+") (opt "?")))
-             sequence
-             (not (and (eq (car sequence) 'bol) (eq (preceding-char) ?^))))
-        (let ((operator (match-string 0)))
-          (goto-char (match-end 0))
-          (setq sequence (cons (xr--postfix operator (car sequence))
-                               (cdr sequence)))))
+       ((looking-at (rx (group (any "*?+")) (opt "?")))
+        (if (and sequence
+                 (not (and (eq (car sequence) 'bol) (eq (preceding-char) ?^))))
+            (let ((operator (match-string 0)))
+              (goto-char (match-end 0))
+              (setq sequence (cons (xr--postfix operator (car sequence))
+                                   (cdr sequence))))
+          (let ((literal (match-string 1)))
+            (goto-char (match-end 1))
+            (xr--report warnings (match-beginning 0)
+                        (format "Unescaped literal `%s'" literal))
+            (push literal sequence))))
 
        ;; \{..\} - not special at beginning of sequence or after ^
        ((and (looking-at (rx "\\{"))
@@ -325,7 +351,7 @@
        ((looking-at (rx "[" (opt (group "^"))))
         (goto-char (match-end 0))
         (let ((negated (match-string 1)))
-          (push (xr--parse-char-alt negated) sequence)))
+          (push (xr--parse-char-alt negated warnings) sequence)))
 
        ;; group
        ((looking-at (rx "\\(" (opt (group "?")
@@ -338,7 +364,7 @@
           (when (and question (not colon))
             (error "Invalid \\(? syntax"))
           (goto-char (match-end 0))
-          (let* ((group (xr--parse-alt))
+          (let* ((group (xr--parse-alt warnings))
                  ;; simplify - group has an implicit seq
                  (operand (if (and (listp group) (eq (car group) 'seq))
                               (cdr group)
@@ -407,9 +433,14 @@
        ;; Escaped character. Only \*+?.^$[ really need escaping, but we accept
        ;; any not otherwise handled character after the backslash since
        ;; such sequences are found in the wild.
-       ((looking-at (rx "\\" (group anything)))
+       ((looking-at (rx "\\" (group (or (any "\\*+?.^$")
+                                        (group anything)))))
         (forward-char 2)
-        (push (match-string 1) sequence))
+        (push (match-string 1) sequence)
+        (when (match-beginning 2)
+          (xr--report warnings (match-beginning 0)
+                      (format "Escaped non-special character `%s'"
+                              (match-string 2)))))
 
        (t (error "Backslash at end of regexp"))))
 
@@ -421,12 +452,12 @@
             (t 
              (cons 'seq item-seq))))))
 
-(defun xr--parse-alt ()
+(defun xr--parse-alt (warnings)
   (let ((alternatives nil))             ; reversed
-    (push (xr--parse-seq) alternatives)
+    (push (xr--parse-seq warnings) alternatives)
     (while (not (looking-at (rx (or "\\)" eos))))
       (forward-char 2)                  ; skip \|
-      (push (xr--parse-seq) alternatives))
+      (push (xr--parse-seq warnings) alternatives))
     (if (cdr alternatives)
         ;; Simplify (or nonl "\n") to anything
         (if (or (equal alternatives '(nonl "\n"))
@@ -435,18 +466,32 @@
           (cons 'or (reverse alternatives)))
       (car alternatives))))
 
+(defun xr--parse (re-string warnings)
+  (with-temp-buffer
+    (insert re-string)
+    (goto-char (point-min))
+    (let ((rx (xr--parse-alt warnings)))
+      (when (looking-at (rx "\\)"))
+        (error "Unbalanced \\)"))
+      rx)))
+
 ;;;###autoload
 (defun xr (re-string)
   "Convert a regexp string to rx notation; the inverse of `rx'.
 Passing the returned value to `rx' (or `rx-to-string') yields a regexp string
 equivalent to RE-STRING."
-  (with-temp-buffer
-    (insert re-string)
-    (goto-char (point-min))
-    (let ((rx (xr--parse-alt)))
-      (when (looking-at (rx "\\)"))
-        (error "Unbalanced \\)"))
-      rx)))
+  (xr--parse re-string nil))
+
+;;;###autoload
+(defun xr-lint (re-string)
+  "Detect dubious practices in RE-STRING.
+This includes uses of tolerated but discouraged constructs.
+Outright regexp syntax violations are signalled as errors.
+Return a list of (OFFSET . COMMENT) where COMMENT applies at OFFSET
+in RE-STRING."
+  (let ((warnings (list nil)))
+    (xr--parse re-string warnings)
+    (reverse (car warnings))))
 
 ;; Print a rx expression to a string, unformatted.
 (defun xr--rx-to-string (rx)
