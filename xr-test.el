@@ -275,11 +275,10 @@
                  '((0 . "Escaped non-special character `}'")
                    (4 . "Escaped non-special character `a'")
                    (8 . "Escaped non-special character `%'"))))
-  (should (equal (xr-lint "a?+b+?\\(?:c?\\)*d\\{3\\}+e*\\{2,5\\}")
+  (should (equal (xr-lint "a?+b+?\\(?:c?\\)*d\\{3\\}+e*?\\{2,5\\}")
                  '((2 . "Repetition of repetition")
                    (14 . "Repetition of repetition")
-                   (21 . "Repetition of repetition")
-                   (24 . "Repetition of repetition"))))
+                   (25 . "Repetition of repetition"))))
   )
 
 (provide 'xr-test)

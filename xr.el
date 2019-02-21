@@ -315,8 +315,7 @@
             (let ((operator (match-string 0)))
               (when (and (consp (car sequence))
                          (memq (caar sequence)
-                               '(opt zero-or-more one-or-more
-                                 repeat = >=)))
+                               '(opt zero-or-more one-or-more +? *? ??)))
                 (xr--report warnings (match-beginning 0)
                             "Repetition of repetition"))
               (goto-char (match-end 0))
@@ -335,8 +334,7 @@
         (forward-char 2)
         (when (and (consp (car sequence))
                    (memq (caar sequence)
-                         '(opt zero-or-more one-or-more
-                               repeat = >=)))
+                         '(opt zero-or-more one-or-more +? *? ??)))
           (xr--report warnings (match-beginning 0)
                       "Repetition of repetition"))
         (if (looking-at (rx (opt (group (one-or-more digit)))
