@@ -244,7 +244,8 @@
                      (?|  . string-delimiter)
                      (?!  . comment-delimiter)))))
     (when (not sym)
-      (error "Unknown syntax code `%c'" syntax-code))
+      (error "Unknown syntax code `%s'"
+             (xr--escape-string (char-to-string syntax-code))))
     (let ((item (list 'syntax (cdr sym))))
       (if negated (list 'not item) item))))
 
@@ -455,7 +456,7 @@
           ;; makes it unlikely to be a serious error.
           (xr--report warnings (match-beginning 0)
                       (format "Escaped non-special character `%s'"
-                              (match-string 2)))))
+                              (xr--escape-string (match-string 2))))))
 
        (t (error "Backslash at end of regexp"))))
 
@@ -508,6 +509,36 @@ in RE-STRING."
     (xr--parse re-string warnings)
     (reverse (car warnings))))
 
+;; Escape non-printing characters in a string for maximum readability.
+(defun xr--escape-string (string)
+  ;; Translate control and raw chars to escape sequences for readability.
+  ;; We prefer hex escapes (\xHH) since that is usually what the user wants,
+  ;; but use octal (\OOO) if a legitimate hex digit follows, as
+  ;; hex escapes are not limited to two digits.
+  (replace-regexp-in-string
+   "[\x00-\x1f\"\\\x7f\x80-\xff][[:xdigit:]]?"
+   (lambda (s)
+     (let* ((c (logand (string-to-char s) #xff))
+            (xdigit (substring s 1))
+            (transl (assq c
+                          '((?\" . "\\\"")
+                            (?\\ . "\\\\")
+                            (?\a . "\\a")
+                            (?\b . "\\b")
+                            (?\t . "\\t")
+                            (?\n . "\\n")
+                            (?\v . "\\v")
+                            (?\f . "\\f")
+                            (?\r . "\\r")
+                            (?\e . "\\e")))))
+       (concat
+        (if transl
+            (cdr transl)
+          (format (if (zerop (length xdigit)) "\\x%02x" "\\%03o")
+                  c))
+        xdigit)))
+   string 'fixedcase 'literal))
+
 ;; Print a rx expression to a string, unformatted.
 (defun xr--rx-to-string (rx)
   (cond
@@ -522,35 +553,7 @@ in RE-STRING."
           (rest (mapcar #'xr--rx-to-string (cdr rx))))
       (concat "(" (mapconcat #'identity (cons first rest) " ") ")")))
    ((stringp rx)
-    ;; Translate control and raw chars to escape sequences for readability.
-    ;; We prefer hex escapes (\xHH) since that is usually what the user wants,
-    ;; but use octal (\OOO) if a legitimate hex digit follows, as
-    ;; hex escapes are not limited to two digits.
-    (concat "\""
-            (replace-regexp-in-string
-             "[\x00-\x1f\"\\\x7f\x80-\xff][[:xdigit:]]?"
-             (lambda (s)
-               (let* ((c (logand (string-to-char s) #xff))
-                      (xdigit (substring s 1))
-                      (transl (assq c
-                                    '((?\" . "\\\"")
-                                      (?\\ . "\\\\")
-                                      (?\a . "\\a")
-                                      (?\b . "\\b")
-                                      (?\t . "\\t")
-                                      (?\n . "\\n")
-                                      (?\v . "\\v")
-                                      (?\f . "\\f")
-                                      (?\r . "\\r")
-                                      (?\e . "\\e")))))
-                 (concat
-                  (if transl
-                      (cdr transl)
-                    (format (if (zerop (length xdigit)) "\\x%02x" "\\%03o")
-                            c))
-                  xdigit)))
-             rx 'fixedcase 'literal)
-            "\""))
+    (concat "\"" (xr--escape-string rx) "\""))
    (t (prin1-to-string rx))))
 
 (defun xr-pp-rx-to-str (rx)
