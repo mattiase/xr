@@ -445,11 +445,13 @@
        ;; Escaped character. Only \*+?.^$[ really need escaping, but we accept
        ;; any not otherwise handled character after the backslash since
        ;; such sequences are found in the wild.
-       ((looking-at (rx "\\" (group (or (any "\\*+?.^$[")
+       ((looking-at (rx "\\" (group (or (any "\\*+?.^$[]")
                                         (group anything)))))
         (forward-char 2)
         (push (match-string 1) sequence)
         (when (match-beginning 2)
+          ;; Note that we do not warn about \\], since the symmetry with \\[
+          ;; makes it unlikely to be a serious error.
           (xr--report warnings (match-beginning 0)
                       (format "Escaped non-special character `%s'"
                               (match-string 2)))))
