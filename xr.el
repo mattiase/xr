@@ -121,17 +121,20 @@
        (t
         (let* ((ch (following-char))
                (ch-str (char-to-string ch)))
-          (when (and (eq ch ?\\)
-                     (stringp (car set))
-                     (string-match "\\\\\\'" (car set)))
+          (cond
+           ;; Duplicated \ are common enough for us to remove them (and warn).
+           ((and (eq ch ?\\)
+                 (stringp (car set))
+                 (eq (string-to-char (substring (car set) -1)) ?\\))
             (xr--report warnings (1- (point))
                         "Escaped `\\' inside character alternative"))
-          ;; Merge with the previous string if neither contains "-".
-          (if (and (stringp (car set))
-                   (not (eq ch ?-))
-                   (not (string-match "-" (car set))))
-              (setq set (cons (concat (car set) ch-str) (cdr set)))
-            (push ch-str set)))
+           ;; Merge with the previous string if neither contains "-".
+           ((and (stringp (car set))
+                 (not (eq ch ?-))
+                 (not (string-match "-" (car set))))
+            (setq set (cons (concat (car set) ch-str) (cdr set))))
+           (t
+            (push ch-str set))))
         (forward-char 1))))
 
     (forward-char 1)                    ; eat the ]

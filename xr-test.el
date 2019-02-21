@@ -170,6 +170,8 @@
                  '(zero-or-more (not (any "]" "A-Za-z" "-")))))
   (should (equal (xr "[+*%A-Ka-k0-3${-}]")
                  '(any "+*%" "A-Ka-k0-3" "$" "{-}")))
+  (should (equal (xr "[^\\\\o][A-\\\\][A-\\\\-a]")
+                 '(seq (not (any "\\o")) (any "A-\\") (any "A-\\\\-a"))))
   )
 
 (ert-deftest xr-empty ()
