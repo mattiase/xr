@@ -280,6 +280,9 @@
                  '((2 . "Repetition of repetition")
                    (14 . "Repetition of repetition")
                    (25 . "Repetition of repetition"))))
+  (should (equal (xr-lint "[]-Qa-fz-t]")
+		 '((1 . "Reversed range `]-Q' matches nothing")
+		   (7 . "Reversed range `z-t' matches nothing"))))
   )
 
 (provide 'xr-test)

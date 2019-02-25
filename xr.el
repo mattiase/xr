@@ -80,8 +80,12 @@
   (let ((set nil))
     (cond
      ;; Initial ]-x range
-     ((looking-at (rx "]-" (not (any "]"))))
-      (push (match-string 0) set)
+     ((looking-at (rx "]-" (group (not (any "]")))))
+      (if (>= (string-to-char (match-string 1)) ?\])
+	  (push (match-string 0) set)
+        (xr--report warnings (point)
+		    (format "Reversed range `%s' matches nothing"
+			    (match-string 0))))
       (goto-char (match-end 0)))
      ;; Initial ]
      ((looking-at "]")
@@ -107,14 +111,20 @@
           ;; become (97 . 122) when printed.
           ;; TODO: Possibly convert "[0-9]" to digit, and
           ;; "[0-9a-fA-F]" (and permutations) to hex-digit.
-          (goto-char (match-end 0))
-          (let ((prev (car set)))
-            ;; Merge with preceding range if any.
-            (if (and (stringp prev)
-                     (>= (length prev) 3)
-                     (eq (aref prev 1) ?-))
-                (setq set (cons (concat prev range) (cdr set)))
-              (push range set)))))
+	  (cond
+	   ((<= (aref range 0) (aref range 2))
+            (let ((prev (car set)))
+              ;; Merge with preceding range if any.
+              (if (and (stringp prev)
+                       (>= (length prev) 3)
+                       (eq (aref prev 1) ?-))
+                  (setq set (cons (concat prev range) (cdr set)))
+		(push range set))))
+	   (t
+            (xr--report warnings (point)
+			(format "Reversed range `%s' matches nothing"
+				range))))
+          (goto-char (match-end 0))))
        ((looking-at (rx eos))
         (error "Unterminated character alternative"))
        ;; plain character (including ^ or -)
