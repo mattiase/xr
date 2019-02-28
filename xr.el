@@ -3,7 +3,7 @@
 ;; Copyright (C) 2019 Free Software Foundation, Inc.
 
 ;; Author: Mattias Engdegård <mattiase@acm.org>
-;; Version: 1.3
+;; Version: 1.4
 ;; Keywords: lisp, maint, regexps
 
 ;; This program is free software; you can redistribute it and/or modify
@@ -77,20 +77,23 @@
     (push (cons (1- position) message) (car warnings))))
 
 (defun xr--parse-char-alt (negated warnings)
-  (let ((set nil))
+  (let ((intervals nil)
+        (classes nil))
     (cond
      ;; Initial ]-x range
-     ((looking-at (rx "]-" (group (not (any "]")))))
-      (if (>= (string-to-char (match-string 1)) ?\])
-	  (push (match-string 0) set)
-        (xr--report warnings (point)
-		    (format "Reversed range `%s' matches nothing"
-			    (match-string 0))))
+     ((looking-at (rx "]-" (not (any "]"))))
+      (let ((end (aref (match-string 0) 2)))
+        (if (>= end ?\])
+            (push (vector ?\] end (point)) intervals)
+          (xr--report warnings (point)
+                      (format "Reversed range `%s' matches nothing"
+                              (match-string 0)))))
       (goto-char (match-end 0)))
      ;; Initial ]
      ((looking-at "]")
-      (push "]" set)
+      (push (vector ?\] ?\] (point)) intervals)
       (forward-char 1)))
+
     (while (not (looking-at "]"))
       (cond
        ;; character class
@@ -101,71 +104,121 @@
                              lower multibyte nonascii print punct space
                              unibyte upper word xdigit)))
             (error "No character class `%s'" sym))
-          (push sym set)
+          (if (memq sym classes)
+              (xr--report warnings (point)
+                          (format "Duplicated character class `[:%s:]'" sym))
+            (push sym classes))
           (goto-char (match-end 0))))
        ;; character range
-       ((looking-at (rx (not (any "]")) "-" (not (any "]"))))
-        (let ((range (match-string 0)))
-          ;; We render [a-z] as (any "a-z") instead of (any (?a . ?z))
-          ;; for readability and brevity, and because the latter would
-          ;; become (97 . 122) when printed.
-          ;; TODO: Possibly convert "[0-9]" to digit, and
-          ;; "[0-9a-fA-F]" (and permutations) to hex-digit.
-	  (cond
-	   ((<= (aref range 0) (aref range 2))
-            (let ((prev (car set)))
-              ;; Merge with preceding range if any.
-              (if (and (stringp prev)
-                       (>= (length prev) 3)
-                       (eq (aref prev 1) ?-))
-                  (setq set (cons (concat prev range) (cdr set)))
-		(push range set))))
-	   (t
+       ((looking-at (rx (group (not (any "]"))) "-" (group (not (any "]")))))
+        (let ((start (string-to-char (match-string 1)))
+              (end   (string-to-char (match-string 2))))
+          (cond
+           ((<= start end)
+            (push (vector start end (point)) intervals))
+           (t
             (xr--report warnings (point)
-			(format "Reversed range `%s' matches nothing"
-				range))))
+                        (format "Reversed range `%s' matches nothing"
+                                (match-string 0)))))
           (goto-char (match-end 0))))
        ((looking-at (rx eos))
         (error "Unterminated character alternative"))
        ;; plain character (including ^ or -)
        (t
-        (let* ((ch (following-char))
-               (ch-str (char-to-string ch)))
-          (cond
-           ;; Duplicated \ are common enough for us to remove them (and warn).
-           ((and (eq ch ?\\)
-                 (stringp (car set))
-                 (eq (string-to-char (substring (car set) -1)) ?\\))
-            (xr--report warnings (1- (point))
-                        "Escaped `\\' inside character alternative"))
-           ;; Merge with the previous string if neither contains "-".
-           ((and (stringp (car set))
-                 (not (eq ch ?-))
-                 (not (string-match "-" (car set))))
-            (setq set (cons (concat (car set) ch-str) (cdr set))))
-           (t
-            (push ch-str set))))
+        (let ((ch (following-char)))
+          (push (vector ch ch (point)) intervals))
         (forward-char 1))))
 
     (forward-char 1)                    ; eat the ]
-    (cond
-     ;; Non-negated single-char set, like [$]
-     ((and (not negated)
-           (= (length set) 1)
-           (stringp (car set))
-           (= (length (car set)) 1))
-      (car set))
-     ;; Single named class set, like [[:space:]]
-     ((and (= (length set) 1)
-           (symbolp (car set)))
-      (if negated
-          (list 'not (car set))
-        (car set)))
-     ;; Anything else.
-     (negated
-      (list 'not (cons 'any (reverse set))))
-     (t
-      (cons 'any (reverse set))))))
+
+    ;; Detect duplicates and overlapping intervals.
+    (let* ((sorted
+            (sort (nreverse intervals)
+                  (lambda (a b) (< (aref a 0) (aref b 0)))))
+           (s sorted))
+      (while (cdr s)
+        (let ((this (car s))
+              (next (cadr s)))
+          (when (>= (aref this 1) (aref next 0))
+            (let ((message
+                   (cond
+                    ;; Duplicate character: drop it and warn.
+                    ((and (eq (aref this 0) (aref this 1))
+                          (eq (aref next 0) (aref next 1)))
+                     (setcdr s (cddr s))
+                     (format "Duplicated `%c' inside character alternative"
+                             (aref this 0)))
+                    ;; Duplicate range: drop it and warn.
+                    ((and (eq (aref this 0) (aref next 0))
+                          (eq (aref this 1) (aref next 1)))
+                     (setcdr s (cddr s))
+                     (format "Duplicated `%c-%c' inside character alternative"
+                             (aref this 0) (aref this 1)))
+                    ;; Character in range: drop it and warn.
+                    ((eq (aref this 0) (aref this 1))
+                     (setcar s next)
+                     (setcdr s (cddr s))
+                     (format "Character `%c' included in range `%c-%c'"
+                             (aref this 0) (aref next 0) (aref next 1)))
+                    ;; Same but other way around.
+                    ((eq (aref next 0) (aref next 1))
+                     (setcdr s (cddr s))
+                     (format "Character `%c' included in range `%c-%c'"
+                             (aref next 0) (aref this 0) (aref this 1)))
+                    ;; Overlapping ranges: merge and warn.
+                    (t
+                     (let ((this-end (aref this 1)))
+                       (aset this 1 (max (aref this 1) (aref next 1)))
+                       (setcdr s (cddr s))
+                       (format "Ranges `%c-%c' and `%c-%c' overlap"
+                               (aref this 0) this-end
+                               (aref next 0) (aref next 1)))))))
+              (xr--report warnings (max (aref this 2) (aref next 2))
+                          (xr--escape-string message nil)))))
+        (setq s (cdr s)))
+            
+      ;; Gather ranges and single characters separately.
+      ;; We make no attempts at merging adjacent intervals/characters,
+      ;; nor at splitting short intervals such as "a-b"; if the user
+      ;; wrote it that way, there was probably a reason for it.
+      (let ((ranges nil)
+            (chars nil))
+        (mapc (lambda (interv)
+                (if (eq (aref interv 0) (aref interv 1))
+                    (push (aref interv 0) chars)
+                  (push (string (aref interv 0) ?- (aref interv 1))
+                        ranges)))
+              sorted)
+        
+        (cond
+         ;; Non-negated single-char set, like [$]: make a string.
+         ((and (= (length chars) 1)
+               (not negated)
+               (null ranges)
+               (null classes))
+          (string (car chars)))
+         ;; Single named class, like [[:space:]]: use the symbol.
+         ((and (= (length classes) 1)
+               (null chars)
+               (null ranges))
+          (if negated
+              (list 'not (car classes))
+            (car classes)))
+         ;; Anything else: produce (any ...)
+         (t
+          ;; Put dash last of all single characters.
+          (when (memq ?- chars)
+            (setq chars (cons ?- (delq ?- chars))))
+          (let* ((set (cons 'any
+                            (append
+                             (and ranges
+                                  (list (apply #'concat (nreverse ranges))))
+                             (and chars
+                                  (list (apply #'string (nreverse chars))))
+                             (nreverse classes)))))
+            (if negated
+                (list 'not set)
+              set))))))))
 
 ;; Reverse a sequence, flatten any (seq ...) inside, and concatenate
 ;; adjacent strings.
@@ -255,7 +308,7 @@
                      (?!  . comment-delimiter)))))
     (when (not sym)
       (error "Unknown syntax code `%s'"
-             (xr--escape-string (char-to-string syntax-code))))
+             (xr--escape-string (char-to-string syntax-code) nil)))
     (let ((item (list 'syntax (cdr sym))))
       (if negated (list 'not item) item))))
 
@@ -466,7 +519,7 @@
           ;; makes it unlikely to be a serious error.
           (xr--report warnings (match-beginning 0)
                       (format "Escaped non-special character `%s'"
-                              (xr--escape-string (match-string 2))))))
+                              (xr--escape-string (match-string 2) nil)))))
 
        (t (error "Backslash at end of regexp"))))
 
@@ -494,6 +547,7 @@
 
 (defun xr--parse (re-string warnings)
   (with-temp-buffer
+    (set-buffer-multibyte t)
     (insert re-string)
     (goto-char (point-min))
     (let ((rx (xr--parse-alt warnings)))
@@ -517,10 +571,11 @@ Return a list of (OFFSET . COMMENT) where COMMENT applies at OFFSET
 in RE-STRING."
   (let ((warnings (list nil)))
     (xr--parse re-string warnings)
-    (reverse (car warnings))))
+    (sort (car warnings) #'car-less-than-car)))
 
 ;; Escape non-printing characters in a string for maximum readability.
-(defun xr--escape-string (string)
+;; If ESCAPE-BACKSLASH, also escape \, otherwise don't.
+(defun xr--escape-string (string escape-backslash)
   ;; Translate control and raw chars to escape sequences for readability.
   ;; We prefer hex escapes (\xHH) since that is usually what the user wants,
   ;; but use octal (\OOO) if a legitimate hex digit follows, as
@@ -532,8 +587,6 @@ in RE-STRING."
             (xdigit (substring s 1))
             (transl (assq c
                           '((?\" . "\\\"")
-                            (?\\ . "\\\\")
-                            (?\a . "\\a")
                             (?\b . "\\b")
                             (?\t . "\\t")
                             (?\n . "\\n")
@@ -542,10 +595,11 @@ in RE-STRING."
                             (?\r . "\\r")
                             (?\e . "\\e")))))
        (concat
-        (if transl
-            (cdr transl)
-          (format (if (zerop (length xdigit)) "\\x%02x" "\\%03o")
-                  c))
+        (cond (transl (cdr transl))
+              ((eq c ?\\)
+               (if escape-backslash "\\\\" "\\"))
+              ((zerop (length xdigit)) (format "\\x%02x" c))
+              (t (format (format "\\%03o" c))))
         xdigit)))
    string 'fixedcase 'literal))
 
@@ -563,7 +617,7 @@ in RE-STRING."
           (rest (mapcar #'xr--rx-to-string (cdr rx))))
       (concat "(" (mapconcat #'identity (cons first rest) " ") ")")))
    ((stringp rx)
-    (concat "\"" (xr--escape-string rx) "\""))
+    (concat "\"" (xr--escape-string rx t) "\""))
    (t (prin1-to-string rx))))
 
 (defun xr-pp-rx-to-str (rx)
