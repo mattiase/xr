@@ -190,7 +190,16 @@
                         ranges)))
               sorted)
         
+        ;; Note that we return (any) for non-negated empty sets,
+        ;; such as [z-a]. (any) is not accepted by rx but at least we
+        ;; are not hiding potential bugs from the user.
         (cond
+         ;; Negated empty set, like [^z-a]: anything.
+         ((and negated
+               (null chars)
+               (null ranges)
+               (null classes))
+          'anything)
          ;; Non-negated single-char set, like [$]: make a string.
          ((and (= (length chars) 1)
                (not negated)

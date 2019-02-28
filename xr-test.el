@@ -174,6 +174,8 @@
                  '(seq (not (any "\\o")) (any "A-\\") (any "A-a"))))
   (should (equal (xr "[^A-FFGI-LI-Mb-da-eg-ki-ns-tz-v]")
                  '(not (any "A-FI-Ma-eg-ns-t" "G"))))
+  (should (equal (xr "[z-a][^z-a]")
+                 '(seq (any) anything)))
   )
 
 (ert-deftest xr-empty ()
