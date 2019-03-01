@@ -3,7 +3,7 @@
 ;; Copyright (C) 2019 Free Software Foundation, Inc.
 
 ;; Author: Mattias Engdegård <mattiase@acm.org>
-;; Version: 1.4
+;; Version: 1.5
 ;; Keywords: lisp, maint, regexps
 
 ;; This program is free software; you can redistribute it and/or modify
@@ -611,7 +611,7 @@ Passing the returned value to `rx' (or `rx-to-string') yields a regexp string
 equivalent to RE-STRING.  DIALECT controls the choice of keywords,
 and is one of:
 `verbose'       -- verbose keywords
-`short'         -- short keywords
+`brief'         -- short keywords
 `terse'         -- very short keywords
 `medium' or nil -- a compromise (the default)"
   (let ((keywords (assq (or dialect 'medium) xr--keywords)))
