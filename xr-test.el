@@ -258,6 +258,49 @@
                  "(?? nonl)\n"))
   (should (equal (xr-pp-rx-to-str '(repeat 1 63 "a"))
                  "(repeat 1 63 \"a\")\n"))
+  (let ((indent-tabs-mode nil))
+    (should (equal (xr-pp-rx-to-str
+                    '(seq (1+ nonl
+                              (or "a"
+                                  (not (any space))))
+                          (* (? (not cntrl)
+                                blank
+                                (| nonascii "abcdef")))))
+                   (concat
+                    "(seq (1+ nonl\n"
+                    "         (or \"a\"\n"
+                    "             (not (any space))))\n"
+                    "     (* (? (not cntrl)\n"
+                    "           blank\n"
+                    "           (| nonascii \"abcdef\"))))\n"))))
+  )
+
+(ert-deftest xr-dialect ()
+  (should (equal (xr "a*b+c?d\\{2,5\\}\\(e\\|f\\)[gh][^ij]" 'medium)
+                 '(seq (zero-or-more "a") (one-or-more "b") (opt "c")
+                       (repeat 2 5 "d") (group (or "e" "f"))
+                       (any "gh") (not (any "ij")))))
+  (should (equal (xr "a*b+c?d\\{2,5\\}\\(e\\|f\\)[gh][^ij]" 'verbose)
+                 '(seq (zero-or-more "a") (one-or-more "b") (zero-or-one "c")
+                       (repeat 2 5 "d") (group (or "e" "f"))
+                       (any "gh") (not (any "ij")))))
+  (should (equal (xr "a*b+c?d\\{2,5\\}\\(e\\|f\\)[gh][^ij]" 'brief)
+                 '(seq (0+ "a") (1+ "b") (opt "c")
+                       (repeat 2 5 "d") (group (or "e" "f"))
+                       (any "gh") (not (any "ij")))))
+  (should (equal (xr "a*b+c?d\\{2,5\\}\\(e\\|f\\)[gh][^ij]" 'terse)
+                 '(: (* "a") (+ "b") (? "c")
+                     (** 2 5 "d") (group (| "e" "f"))
+                     (in "gh") (not (in "ij")))))
+  (should (equal (xr "^\\`\\<.\\>\\'$" 'medium)
+                 '(seq bol bos bow nonl eow eos eol)))
+  (should (equal (xr "^\\`\\<.\\>\\'$" 'verbose)
+                 '(seq line-start string-start word-start not-newline
+                       word-end string-end line-end)))
+  (should (equal (xr "^\\`\\<.\\>\\'$" 'brief)
+                 '(seq bol bos bow nonl eow eos eol)))
+  (should (equal (xr "^\\`\\<.\\>\\'$" 'terse)
+                 '(: bol bos bow nonl eow eos eol)))
   )
 
 (ert-deftest xr-lint ()

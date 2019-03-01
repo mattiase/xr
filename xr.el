@@ -564,12 +564,63 @@
         (error "Unbalanced \\)"))
       rx)))
 
+;; Substitute keywords in RX using HEAD-ALIST and BODY-ALIST in the
+;; head and body positions, respectively.
+(defun xr--substitute-keywords (head-alist body-alist rx)
+  (cond
+   ((symbolp rx)
+    (or (cdr (assq rx body-alist)) rx))
+   ((consp rx)
+    (cons (or (cdr (assq (car rx) head-alist))
+              (car rx))
+          (mapcar (lambda (elem) (xr--substitute-keywords
+                                  head-alist body-alist elem))
+                  (cdr rx))))
+   (t rx)))
+
+;; Alist mapping keyword dialect to (HEAD-ALIST . BODY-ALIST),
+;; or to nil if no translation should take place.
+;; The alists are mapping from the default choice.
+(defconst xr--keywords
+  '((medium . nil)
+    (brief . (((zero-or-more . 0+)
+               (one-or-more  . 1+))
+              . nil))
+    (terse . (((seq          . :)
+               (or           . |)
+               (any          . in)
+               (zero-or-more . *)
+               (one-or-more  . +)
+               (opt          . ? )
+               (repeat       . **))
+              . nil))
+    (verbose . (((opt . zero-or-one))
+                .
+                ((nonl . not-newline)
+                 (bol  . line-start)
+                 (eol  . line-end)
+                 (bos  . string-start)
+                 (eos  . string-end)
+                 (bow  . word-start)
+                 (eow  . word-end))))))
+
 ;;;###autoload
-(defun xr (re-string)
+(defun xr (re-string &optional dialect)
   "Convert a regexp string to rx notation; the inverse of `rx'.
 Passing the returned value to `rx' (or `rx-to-string') yields a regexp string
-equivalent to RE-STRING."
-  (xr--parse re-string nil))
+equivalent to RE-STRING.  DIALECT controls the choice of keywords,
+and is one of:
+`verbose'       -- verbose keywords
+`short'         -- short keywords
+`terse'         -- very short keywords
+`medium' or nil -- a compromise (the default)"
+  (let ((keywords (assq (or dialect 'medium) xr--keywords)))
+    (unless keywords
+      (error "Unknown dialect `%S'" dialect))
+    (let ((rx (xr--parse re-string nil)))
+      (if (cdr keywords)
+          (xr--substitute-keywords (cadr keywords) (cddr keywords) rx)
+        rx))))
 
 ;;;###autoload
 (defun xr-lint (re-string)
@@ -618,11 +669,11 @@ in RE-STRING."
    ((eq rx '*?) "*?")                   ; Avoid unnecessary \ in symbol.
    ((eq rx '+?) "+?")
    ((consp rx)
-    ;; Render character ? as ?? when first in a list.
-    ;; Elsewhere, it's just an integer.
-    (let ((first (if (eq (car rx) ??)
-                     "??"
-                   (xr--rx-to-string (car rx))))
+    ;; Render the characters SPC and ? as ? and ?? when first in a list.
+    ;; Elsewhere, they are just integers.
+    (let ((first (cond ((eq (car rx) ?\s) "?")
+                       ((eq (car rx) ??) "??")
+                       (t (xr--rx-to-string (car rx)))))
           (rest (mapcar #'xr--rx-to-string (cdr rx))))
       (concat "(" (mapconcat #'identity (cons first rest) " ") ")")))
    ((stringp rx)
@@ -636,26 +687,30 @@ It does a slightly better job than standard `pp' for rx purposes."
     (insert (xr--rx-to-string rx) "\n")
     (pp-buffer)
 
-    ;; Remove the line break after "(not" for readability and compactness.
+    ;; Remove the line break after short operator names for
+    ;; readability and compactness.
     (goto-char (point-min))
     (while (re-search-forward
-            (rx bol
-                (zero-or-more (any space)) "(not"
-                (group "\n" (zero-or-more (any space)))
-                (one-or-more nonl) "))"
-                eol)
+            (rx "("
+                (or "not" "0+" "1+" "*" "+" "?" "opt" "seq" ":" "|" "or"
+                    "??" "*?" "+?" "=" ">=" "**")
+                (group "\n" (zero-or-more (any space))))
             nil t)
       (replace-match " " t t nil 1))
     
+    ;; Reindent the buffer in case line breaks have been removed.
+    (goto-char (point-min))
+    (indent-sexp)
+
     (buffer-string)))
 
 ;;;###autoload
-(defun xr-pp (re-string)
+(defun xr-pp (re-string &optional dialect)
   "Convert to `rx' notation and pretty-print.
-This basically does `(pp (xr RE-STRING))', but in a slightly more readable
-way.  It is intended for use from an interactive elisp session.
-Returns nil."
-  (insert (xr-pp-rx-to-str (xr re-string))))
+This basically does `(pp (xr RE-STRING DIALECT))', but in a slightly
+more readable way.  It is intended for use from an interactive elisp
+session.  Returns nil."
+  (insert (xr-pp-rx-to-str (xr re-string dialect))))
 
 (provide 'xr)
 
