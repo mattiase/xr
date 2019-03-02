@@ -97,13 +97,13 @@
     (while (not (looking-at "]"))
       (cond
        ;; character class
-       ((looking-at (rx "[:" (group (one-or-more letter)) ":]"))
+       ((looking-at (rx "[:" (group (*? anything)) ":]"))
         (let ((sym (intern (match-string 1))))
-          (when (not (memq sym
-                           '(ascii alnum alpha blank cntrl digit graph
-                             lower multibyte nonascii print punct space
-                             unibyte upper word xdigit)))
-            (error "No character class `%s'" sym))
+          (unless (memq sym
+                        '(ascii alnum alpha blank cntrl digit graph
+                          lower multibyte nonascii print punct space
+                          unibyte upper word xdigit))
+            (error "No character class `%s'" (match-string 0)))
           (if (memq sym classes)
               (xr--report warnings (point)
                           (format "Duplicated character class `[:%s:]'" sym))
