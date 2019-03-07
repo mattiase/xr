@@ -347,6 +347,8 @@
                    (16 . "Ranges `a-e' and `b-d' overlap")
                    (22 . "Ranges `g-k' and `i-n' overlap")
                    (29 . "Character `3' included in range `3-7'"))))
+  (should (equal (xr-lint "[a[:digit:]b[:punct:]c[:digit:]]")
+                 '((22 . "Duplicated character class `[:digit:]'"))))
   )
 
 (provide 'xr-test)
