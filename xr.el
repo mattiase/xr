@@ -126,6 +126,21 @@
        ;; plain character (including ^ or -)
        (t
         (let ((ch (following-char)))
+          (when (and (eq ch ?\[)
+                     ;; Ad-hoc pattern attempting to catch mistakes
+                     ;; on the form [...[...]...]
+                     ;; where we are    ^here
+                     (looking-at (rx "["
+                                     (zero-or-more (not (any "[]")))
+                                     "]"
+                                     (zero-or-more (not (any "[]")))
+                                     (not (any "[\\"))
+                                     "]"))
+                     ;; Only if the alternative didn't start with ]
+                     (not (and intervals
+                               (eq (aref (car (last intervals)) 0) ?\]))))
+            (xr--report warnings (point)
+                        "Suspect `[' in char alternative"))
           (push (vector ch ch (point)) intervals))
         (forward-char 1))))
 

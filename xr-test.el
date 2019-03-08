@@ -356,6 +356,10 @@
                  '((1 . "Uncounted repetition"))))
   (should (equal (xr-lint "a\\{\\}")
                  '((1 . "Implicit zero repetition"))))
+  (should (equal (xr-lint "[0-9[|]*/]")
+                 '((4 . "Suspect `[' in char alternative"))))
+  (should (equal (xr-lint "[^][-].]")
+                 nil))
   )
 
 (provide 'xr-test)
