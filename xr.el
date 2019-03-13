@@ -706,10 +706,10 @@ It does a slightly better job than standard `pp' for rx purposes."
 
 ;;;###autoload
 (defun xr-pp (re-string &optional dialect)
-  "Convert to `rx' notation and pretty-print.
-This basically does `(pp (xr RE-STRING DIALECT))', but in a slightly
-more readable way.  It is intended for use from an interactive elisp
-session.  Returns nil."
+  "Convert to `rx' notation and output the pretty-printed result.
+This function uses `xr' to translate RE-STRING into DIALECT.
+It is intended for use from an interactive elisp session.
+See `xr' for a description of the DIALECT argument."
   (insert (xr-pp-rx-to-str (xr re-string dialect))))
 
 (provide 'xr)
