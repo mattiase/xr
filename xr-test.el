@@ -349,6 +349,8 @@
                    (29 . "Character `3' included in range `3-7'"))))
   (should (equal (xr-lint "[a[:digit:]b[:punct:]c[:digit:]]")
                  '((22 . "Duplicated character class `[:digit:]'"))))
+  (should (equal (xr-lint "a*\\|b+\\|\\(?:a\\)*")
+                 '((8 . "Duplicated alternative branch"))))
   )
 
 (provide 'xr-test)

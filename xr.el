@@ -545,7 +545,11 @@
     (push (xr--parse-seq warnings) alternatives)
     (while (not (looking-at (rx (or "\\)" eos))))
       (forward-char 2)                  ; skip \|
-      (push (xr--parse-seq warnings) alternatives))
+      (let ((pos (point))
+            (seq (xr--parse-seq warnings)))
+        (when (and warnings (member seq alternatives))
+          (xr--report warnings pos "Duplicated alternative branch"))
+        (push seq alternatives)))
     (if (cdr alternatives)
         ;; Simplify (or nonl "\n") to anything
         (if (or (equal alternatives '(nonl "\n"))
