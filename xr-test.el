@@ -56,6 +56,7 @@
                  '(repeat 0 1 "a")))
   (should (equal (xr "a\\{1,\\}")
                  '(>= 1 "a")))
+  (should-error (xr "a\\{3,2\\}"))
   )
 
 (ert-deftest xr-backref ()
@@ -351,6 +352,10 @@
                  '((22 . "Duplicated character class `[:digit:]'"))))
   (should (equal (xr-lint "a*\\|b+\\|\\(?:a\\)*")
                  '((8 . "Duplicated alternative branch"))))
+  (should (equal (xr-lint "a\\{,\\}")
+                 '((1 . "Uncounted repetition"))))
+  (should (equal (xr-lint "a\\{\\}")
+                 '((1 . "Implicit zero repetition"))))
   )
 
 (provide 'xr-test)

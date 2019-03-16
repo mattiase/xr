@@ -342,6 +342,8 @@
 ;; Apply a repetition of {LOWER,UPPER} to OPERAND.
 ;; UPPER may be nil, meaning infinity.
 (defun xr--repeat (lower upper operand)
+  (when (and upper (> lower upper))
+    (error "Invalid repetition interval"))
   ;; rx does not accept (= 0 ...) or (>= 0 ...), so we use 
   ;; (repeat 0 0 ...) and (zero-or-more ...), respectively.
   ;; Note that we cannot just delete the operand if LOWER=UPPER=0,
@@ -420,6 +422,11 @@
                   (comma (match-string 2))
                   (upper (and (match-string 3)
                               (string-to-number (match-string 3)))))
+              (unless (or (match-beginning 1) (match-string 3))
+                (xr--report warnings (- (match-beginning 0) 2)
+                            (if comma
+                                "Uncounted repetition"
+                                "Implicit zero repetition")))
               (goto-char (match-end 0))
               (setq sequence (cons (xr--repeat
                                     lower
