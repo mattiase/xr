@@ -413,7 +413,9 @@
                    (14 . "Duplicated character `!'")
                    (14 . "Unnecessarily escaped `!'")
                    (16 . "Character `b' included in range `a-z'"))))
-  )
+  (should (equal (xr-skip-set-lint "[^a-z]")
+                 '((0 . "Suspect skip set framed in `[...]'"))))
+)
 
 (provide 'xr-test)
 
