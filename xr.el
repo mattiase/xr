@@ -3,7 +3,7 @@
 ;; Copyright (C) 2019 Free Software Foundation, Inc.
 
 ;; Author: Mattias Engdegård <mattiase@acm.org>
-;; Version: 1.6
+;; Version: 1.7
 ;; Keywords: lisp, maint, regexps
 
 ;; This program is free software; you can redistribute it and/or modify
@@ -30,11 +30,24 @@
 ;;   
 ;; Please refer to `rx' for more information about the notation.
 ;;
-;; The exported functions are:
+;; In addition to Emacs regexps, this package can also parse and
+;; troubleshoot skip set strings, which are arguments to
+;; `skip-chars-forward' and `skip-chars-backward'.
 ;;
-;;  `xr'              - returns the converted rx expression
-;;  `xr-pp'           - pretty-prints the converted rx expression
-;;  `xr-lint'         - finds deprecated syntax in a regexp string
+;; The exported functions for regexps are:
+;;
+;;  `xr'               - returns the converted rx expression
+;;  `xr-pp'            - converts to rx and pretty-prints
+;;  `xr-lint'          - finds mistakes in a regexp string
+;;
+;; For skip sets we also have:
+;;
+;;  `xr-skip-set'      - return the converted rx expression
+;;  `xr-skip-set-pp'   - converts to rx and pretty-prints
+;;  `xr-skip-set-lint' - finds mistakes in a skip set string
+;;
+;; There is finally the generally useful:
+;;
 ;;  `xr-pp-rx-to-str' - pretty-prints an rx expression to a string
 ;;
 ;; Suggested use is from an interactive elisp buffer.
@@ -591,6 +604,153 @@
         (error "Unbalanced \\)"))
       rx)))
 
+;; Grammar for skip-set strings:
+;;
+;; skip-set ::= `^'? item*
+;; item     ::= range | single
+;; range    ::= single `-' end
+;; single   ::= (any char but `\')
+;;            | `\' (any char)
+;; end      ::= single | `\'
+;;
+;; The grammar is ambiguous, resolved left-to-right:
+;; - a leading ^ is always a negation marker
+;; - an item is always a range if possible
+;; - an end is only `\' if last in the string
+
+(defun xr--parse-skip-set-buffer (warnings)
+  (let ((negated (looking-at (rx "^")))
+        (ranges nil)
+        (classes nil))
+    (when negated
+      (forward-char 1))
+    (while (not (eobp))
+      (cond
+       ((looking-at (rx "[:" (group (*? anything)) ":]"))
+        (let ((sym (intern (match-string 1))))
+          (unless (memq sym
+                        '(ascii alnum alpha blank cntrl digit graph
+                                lower multibyte nonascii print punct space
+                                unibyte upper word xdigit))
+            (error "No character class `%s'" (match-string 0)))
+          (when (memq sym classes)
+            (xr--report warnings (point)
+                        (format "Duplicated character class `%s'"
+                                (match-string 0))))
+          (push sym classes)))
+
+       ((looking-at (rx (or (seq "\\" (group anything))
+                            (group (not (any "\\"))))
+                        (opt "-"
+                             (or (seq "\\" (group anything))
+                                 (group anything)))))
+        (let ((start (string-to-char (or (match-string 1)
+                                         (match-string 2))))
+              (end (or (and (match-beginning 3)
+                            (string-to-char (match-string 3)))
+                       (and (match-beginning 4)
+                            (string-to-char (match-string 4))))))
+          (when (and (match-beginning 1)
+                     (not (memq start '(?^ ?- ?\\))))
+            (xr--report warnings (point)
+                        (xr--escape-string
+                         (format "Unnecessarily escaped `%c'" start) nil)))
+          (if (and end (> start end))
+              (xr--report warnings (point)
+                          (xr--escape-string
+                           (format "Reversed range `%c-%c'" start end) nil))
+            (when (eq start end)
+              (xr--report warnings (point)
+                          (xr--escape-string
+                           (format "Single-element range `%c-%c'" start end)
+                           nil))
+              (setq end nil))
+            (let ((tail ranges))
+              (while tail
+                (let ((range (car tail)))
+                  (if (and (<= (car range) (or end start))
+                           (<= start (cdr range)))
+                      (let ((msg
+                             (cond
+                              ((and end (< start end)
+                                    (< (car range) (cdr range)))
+                               (format "Ranges `%c-%c' and `%c-%c' overlap"
+                                       (car range) (cdr range) start end))
+                              ((and end (< start end))
+                               (format "Range `%c-%c' includes character `%c'"
+                                       start end (car range)))
+                              ((< (car range) (cdr range))
+                               (format
+                                "Character `%c' included in range `%c-%c'"
+                                start (car range) (cdr range)))
+                              (t
+                               (format "Duplicated character `%c'"
+                                       start)))))
+                        (xr--report warnings (point)
+                                    (xr--escape-string msg nil))
+                        ;; Expand previous interval to include this range.
+                        (setcar range (min (car range) start))
+                        (setcdr range (max (cdr range) (or end start)))
+                        (setq start nil)
+                        (setq tail nil))
+                    (setq tail (cdr tail))))))
+            (when start
+              (push (cons start (or end start)) ranges)))))
+
+       ((looking-at (rx "\\" eos))
+        (xr--report warnings (point)
+                    "Stray `\\' at end of string")))
+
+      (goto-char (match-end 0)))
+
+    (cond
+     ;; Single non-negated character, like "-": make a string.
+     ((and (not negated)
+           (null classes)
+           (= (length ranges) 1)
+           (eq (caar ranges) (cdar ranges)))
+      (regexp-quote (char-to-string (caar ranges))))
+     ;; Negated empty set, like "^": anything.
+     ((and negated
+           (null classes)
+           (null ranges))
+      'anything)
+     ;; Single named class, like "[:nonascii:]": use the symbol.
+     ((and (= (length classes) 1)
+           (null ranges))
+      (if negated
+          (list 'not (car classes))
+        (car classes)))
+     ;; Anything else: produce (any ...)
+     (t
+      (let ((intervals nil)
+            (chars nil))
+        (mapc (lambda (range)
+                (if (eq (car range) (cdr range))
+                    (push (car range) chars)
+                  (push (string (car range) ?- (cdr range)) intervals)))
+              ranges)
+        ;; Put a single `-' last.
+        (when (memq ?- chars)
+          (setq chars (append (delq ?- chars) (list ?-))))
+        (let ((set (cons 'any
+                         (append
+                          (and intervals
+                               (list (apply #'concat intervals)))
+                          (and chars
+                               (list (apply #'string chars)))
+                          (nreverse classes)))))
+          (if negated
+              (list 'not set)
+            set)))))))
+
+(defun xr--parse-skip-set (skip-string warnings)
+  (with-temp-buffer
+    (set-buffer-multibyte t)
+    (insert skip-string)
+    (goto-char (point-min))
+    (xr--parse-skip-set-buffer warnings)))
+
 ;; Substitute keywords in RX using HEAD-ALIST and BODY-ALIST in the
 ;; head and body positions, respectively.
 (defun xr--substitute-keywords (head-alist body-alist rx)
@@ -631,6 +791,14 @@
                  (bow  . word-start)
                  (eow  . word-end))))))
 
+(defun xr--in-dialect (rx dialect)
+  (let ((keywords (assq (or dialect 'medium) xr--keywords)))
+    (unless keywords
+      (error "Unknown dialect `%S'" dialect))
+    (if (cdr keywords)
+        (xr--substitute-keywords (cadr keywords) (cddr keywords) rx)
+      rx)))
+  
 ;;;###autoload
 (defun xr (re-string &optional dialect)
   "Convert a regexp string to rx notation; the inverse of `rx'.
@@ -641,23 +809,41 @@ and is one of:
 `brief'         -- short keywords
 `terse'         -- very short keywords
 `medium' or nil -- a compromise (the default)"
-  (let ((keywords (assq (or dialect 'medium) xr--keywords)))
-    (unless keywords
-      (error "Unknown dialect `%S'" dialect))
-    (let ((rx (xr--parse re-string nil)))
-      (if (cdr keywords)
-          (xr--substitute-keywords (cadr keywords) (cddr keywords) rx)
-        rx))))
+  (xr--in-dialect (xr--parse re-string nil) dialect))
+
+;;;###autoload
+(defun xr-skip-set (skip-set-string &optional dialect)
+  "Convert a skip set string argument to rx notation.
+SKIP-SET-STRING is interpreted according to the syntax of
+`skip-chars-forward' and `skip-chars-backward' and converted to
+a character class on `rx' form.
+If desired, `rx' can then be used to convert the result to an
+ordinary regexp.
+See `xr' for a description of the DIALECT argument."
+  (xr--in-dialect (xr--parse-skip-set skip-set-string nil) dialect))
 
 ;;;###autoload
 (defun xr-lint (re-string)
-  "Detect dubious practices in RE-STRING.
+  "Detect dubious practices and possible mistakes in RE-STRING.
 This includes uses of tolerated but discouraged constructs.
 Outright regexp syntax violations are signalled as errors.
 Return a list of (OFFSET . COMMENT) where COMMENT applies at OFFSET
 in RE-STRING."
   (let ((warnings (list nil)))
     (xr--parse re-string warnings)
+    (sort (car warnings) #'car-less-than-car)))
+
+;;;###autoload
+(defun xr-skip-set-lint (skip-set-string)
+  "Detect dubious practices and possible mistakes in SKIP-SET-STRING.
+This includes uses of tolerated but discouraged constructs.
+Outright syntax violations are signalled as errors.
+The argument is interpreted according to the syntax of
+`skip-chars-forward' and `skip-chars-backward'.
+Return a list of (OFFSET . COMMENT) where COMMENT applies at OFFSET
+in SKIP-SET-STRING."
+  (let ((warnings (list nil)))
+    (xr--parse-skip-set skip-set-string warnings)
     (sort (car warnings) #'car-less-than-car)))
 
 ;; Escape non-printing characters in a string for maximum readability.
@@ -737,6 +923,15 @@ This function uses `xr' to translate RE-STRING into DIALECT.
 It is intended for use from an interactive elisp session.
 See `xr' for a description of the DIALECT argument."
   (insert (xr-pp-rx-to-str (xr re-string dialect))))
+
+;;;###autoload
+(defun xr-skip-set-pp (skip-set-string &optional dialect)
+  "Convert a skip set string to `rx' notation and pretty-print.
+This function uses `xr-skip-set' to translate SKIP-SET-STRING
+into DIALECT.
+It is intended for use from an interactive elisp session.
+See `xr' for a description of the DIALECT argument."
+  (insert (xr-pp-rx-to-str (xr-skip-set skip-set-string dialect))))
 
 (provide 'xr)
 
