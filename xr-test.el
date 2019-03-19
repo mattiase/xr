@@ -342,6 +342,8 @@
   (should (equal (xr-lint "[]-Qa-fz-t]")
                  '((1 . "Reversed range `]-Q' matches nothing")
                    (7 . "Reversed range `z-t' matches nothing"))))
+  (should (equal (xr-lint "[z-a][^z-a]")
+                 nil))
   (should (equal (xr-lint "[^A-FFGI-LI-Mb-da-eg-ki-ns-t33-7]")
                  '((5  . "Character `F' included in range `A-F'")
                    (10 . "Ranges `I-L' and `I-M' overlap")

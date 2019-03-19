@@ -126,6 +126,8 @@
           (cond
            ((<= start end)
             (push (vector start end (point)) intervals))
+           ;; It's unlikely that anyone writes z-a by mistake; don't complain.
+           ((and (eq start ?z) (eq end ?a)))
            (t
             (xr--report warnings (point)
                         (format "Reversed range `%s' matches nothing"
