@@ -656,16 +656,26 @@
             (xr--report warnings (point)
                         (xr--escape-string
                          (format "Unnecessarily escaped `%c'" start) nil)))
+          (when (and (match-beginning 3)
+                     (not (memq end '(?^ ?- ?\\))))
+            (xr--report warnings (1- (match-beginning 3))
+                        (xr--escape-string
+                         (format "Unnecessarily escaped `%c'" end) nil)))
           (if (and end (> start end))
               (xr--report warnings (point)
                           (xr--escape-string
                            (format "Reversed range `%c-%c'" start end) nil))
-            (when (eq start end)
+            (cond
+             ((eq start end)
               (xr--report warnings (point)
                           (xr--escape-string
                            (format "Single-element range `%c-%c'" start end)
-                           nil))
-              (setq end nil))
+                           nil)))
+             ((eq (1+ start) end)
+              (xr--report warnings (point)
+                          (xr--escape-string
+                           (format "Two-element range `%c-%c'" start end)
+                           nil))))
             (let ((tail ranges))
               (while tail
                 (let ((range (car tail)))
@@ -703,6 +713,12 @@
                     "Stray `\\' at end of string")))
 
       (goto-char (match-end 0)))
+
+    (when (and (null ranges) (null classes))
+      (xr--report warnings (point-min)
+                  (if negated
+                      "Negated empty set matches anything"
+                    "Empty set matches nothing")))
 
     (cond
      ;; Single non-negated character, like "-": make a string.
