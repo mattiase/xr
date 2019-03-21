@@ -3,7 +3,7 @@
 ;; Copyright (C) 2019 Free Software Foundation, Inc.
 
 ;; Author: Mattias Engdegård <mattiase@acm.org>
-;; Version: 1.8
+;; Version: 1.9
 ;; Keywords: lisp, maint, regexps
 
 ;; This program is free software; you can redistribute it and/or modify
