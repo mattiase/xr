@@ -47,7 +47,7 @@
 ;;  `xr-skip-set-lint' - finds mistakes in a skip set string
 ;;
 ;;  General:
-;;  `xr-pp-rx-to-str' - pretty-prints an rx expression to a string
+;;  `xr-pp-rx-to-str'  - pretty-prints an rx expression to a string
 ;;
 ;; Example (regexp found in compile.el):
 ;;
@@ -61,7 +61,7 @@
 ;; The rx notation admits many synonyms. The user is encouraged to
 ;; edit the result for maximum readability, consistency and personal
 ;; preference when replacing existing regexps in elisp code.
-
+;;
 ;; Related work:
 ;;
 ;; The `lex' package, a lexical analyser generator, provides the
@@ -616,10 +616,12 @@
 ;; Ambiguities in the above are resolved greedily left-to-right.
 
 (defun xr--parse-skip-set-buffer (warnings)
+
   ;; An ad-hoc check, but one that catches lots of mistakes.
   (when (and (looking-at (rx "[" (one-or-more anything) "]" eos))
              (not (looking-at (rx "[:" (one-or-more anything) ":]" eos))))
     (xr--report warnings (point) "Suspect skip set framed in `[...]'"))
+
   (let ((negated (looking-at (rx "^")))
         (ranges nil)
         (classes nil))
@@ -863,13 +865,9 @@ in SKIP-SET-STRING."
     (xr--parse-skip-set skip-set-string warnings)
     (sort (car warnings) #'car-less-than-car)))
 
-;; Escape non-printing characters in a string for maximum readability.
-;; If ESCAPE-PRINTABLE, also escape \ and ", otherwise don't.
 (defun xr--escape-string (string escape-printable)
-  ;; Translate control and raw chars to escape sequences for readability.
-  ;; We prefer hex escapes (\xHH) since that is usually what the user wants,
-  ;; but use octal (\OOO) if a legitimate hex digit follows, as
-  ;; hex escapes are not limited to two digits.
+  "Escape non-printing characters in a string for maximum readability.
+If ESCAPE-PRINTABLE, also escape \\ and \", otherwise don't."
   (replace-regexp-in-string
    "[\x00-\x1f\"\\\x7f\x80-\xff][[:xdigit:]]?"
    (lambda (s)
@@ -883,6 +881,9 @@ in SKIP-SET-STRING."
                             (?\f . "\\f")
                             (?\r . "\\r")
                             (?\e . "\\e")))))
+       ;; We prefer hex escapes (\xHH) because that is what most users
+       ;; want today, but use octal (\OOO) if the following character
+       ;; is a legitimate hex digit.
        (concat
         (cond (transl (cdr transl))
               ((memq c '(?\\ ?\"))
