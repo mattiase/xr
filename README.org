@@ -51,4 +51,4 @@ Utility:
 
 * See also
 
-The [[https://github.com/mattiase/relint][relint]] package uses xr to find regexp mistakes in elisp code.
+The [[https://elpa.gnu.org/packages/relint.html][relint]] package uses xr to find regexp mistakes in elisp code.
