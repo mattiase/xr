@@ -98,6 +98,10 @@
             (push (vector ?\] end (point)) intervals)
           (xr--report warnings (point)
                       (format "Reversed range `%s' matches nothing"
+                              (xr--escape-string (match-string 0) nil))))
+        (when (eq end ?^)
+          (xr--report warnings (point)
+                      (format "Two-character range `%s'"
                               (xr--escape-string (match-string 0) nil)))))
       (goto-char (match-end 0)))
      ;; Initial ]
@@ -133,6 +137,12 @@
             (xr--report warnings (point)
                         (format "Reversed range `%s' matches nothing"
                                 (xr--escape-string (match-string 0) nil)))))
+          ;; Suppress warnings about ranges between adjacent digits,
+          ;; like [0-1], as they are common and harmless.
+          (when (and (= end (1+ start)) (not (<= ?0 start end ?9)))
+            (xr--report warnings (point)
+                        (format "Two-character range `%s'"
+                                (xr--escape-string (match-string 0) nil))))
           (goto-char (match-end 0))))
        ((looking-at (rx eos))
         (error "Unterminated character alternative"))

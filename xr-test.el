@@ -349,6 +349,7 @@
                    (10 . "Ranges `I-L' and `I-M' overlap")
                    (16 . "Ranges `a-e' and `b-d' overlap")
                    (22 . "Ranges `g-k' and `i-n' overlap")
+                   (25 . "Two-character range `s-t'")
                    (29 . "Character `3' included in range `3-7'"))))
   (should (equal (xr-lint "[a[:digit:]b[:punct:]c[:digit:]]")
                  '((22 . "Duplicated character class `[:digit:]'"))))
@@ -362,6 +363,10 @@
                  '((4 . "Suspect `[' in char alternative"))))
   (should (equal (xr-lint "[^][-].]")
                  nil))
+  (should (equal (xr-lint "[0-1]")
+                 nil))
+  (should (equal (xr-lint "[^]-][]-^]")
+                 '((6 . "Two-character range `]-^'"))))
   )
 
 (ert-deftest xr-skip-set ()
