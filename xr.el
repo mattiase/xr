@@ -3,7 +3,7 @@
 ;; Copyright (C) 2019 Free Software Foundation, Inc.
 
 ;; Author: Mattias Engdegård <mattiase@acm.org>
-;; Version: 1.9
+;; Version: 1.10
 ;; URL: https://github.com/mattiase/xr
 ;; Keywords: lisp, maint, regexps
 
@@ -77,6 +77,32 @@
 ;;
 ;; Neither of these packages parse skip-set strings or provide
 ;; mistake-finding functions.
+
+;;; News:
+
+;; Version 1.10:
+;; - Warn about [[:class:]] in skip-sets
+;; - Warn about two-character ranges like [*-+] in regexps
+;; Version 1.9:
+;; - Don't complain about [z-a] and [^z-a] specifically
+;; - Improved skip set checks
+;; Version 1.8:
+;; - Improved skip set checks
+;; Version 1.7:
+;; - Parse skip-sets, adding `xr-skip-set', `xr-skip-set-pp' and
+;;   `xr-skip-set-lint'
+;; - Ad-hoc check for misplaced `]' in regexps
+;; Version 1.6:
+;; - Detect duplicated branches like A\|A
+;; Version 1.5:
+;; - Add dialect option to `xr' and `xr-pp'
+;; - Negative empty sets, [^z-a], now become `anything'
+;; Version 1.4:
+;; - Detect overlap in character alternatives
+;; Version 1.3:
+;; - Improved xr-lint warnings
+;; Version 1.2:
+;; - `xr-lint' added
 
 ;;; Code:
 
