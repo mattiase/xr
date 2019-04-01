@@ -425,6 +425,8 @@
                  '((2 . "Unnecessarily escaped `$'"))))
   (should (equal (xr-skip-set-lint "[^a-z]")
                  '((0 . "Suspect skip set framed in `[...]'"))))
+  (should (equal (xr-skip-set-lint "[[:space:]].")
+                 '((0 . "Suspect character class framed in `[...]'"))))
   (should (equal (xr-skip-set-lint "")
                  '((0 . "Empty set matches nothing"))))
   (should (equal (xr-skip-set-lint "^")

@@ -647,6 +647,11 @@
                                 lower multibyte nonascii print punct space
                                 unibyte upper word xdigit))
             (error "No character class `%s'" (match-string 0)))
+          ;; Another useful ad-hoc check.
+          (when (and (eq (char-before) ?\[)
+                     (eq (char-after (match-end 0)) ?\]))
+            (xr--report warnings (1- (point))
+                        "Suspect character class framed in `[...]'"))
           (when (memq sym classes)
             (xr--report warnings (point)
                         (format "Duplicated character class `%s'"
