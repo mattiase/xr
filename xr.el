@@ -114,7 +114,8 @@
     (push (cons (1- position) message) (car warnings))))
 
 (defun xr--parse-char-alt (negated warnings)
-  (let ((intervals nil)
+  (let ((start-pos (point))
+        (intervals nil)
         (classes nil))
     (cond
      ;; Initial ]-x range
@@ -190,6 +191,11 @@
                                (eq (aref (car (last intervals)) 0) ?\]))))
             (xr--report warnings (point)
                         "Suspect `[' in char alternative"))
+          (when (and (looking-at (rx "-" (not (any "]"))))
+                     (> (point) start-pos))
+            (xr--report
+             warnings (point)
+             "Literal `-' not first or last in character alternative"))
           (push (vector ch ch (point)) intervals))
         (forward-char 1))))
 
@@ -660,10 +666,12 @@
     (xr--report warnings (point) "Suspect skip set framed in `[...]'"))
 
   (let ((negated (looking-at (rx "^")))
+        (start-pos (point))
         (ranges nil)
         (classes nil))
     (when negated
-      (forward-char 1))
+      (forward-char 1)
+      (setq start-pos (point)))
     (while (not (eobp))
       (cond
        ((looking-at (rx "[:" (group (*? anything)) ":]"))
@@ -705,6 +713,12 @@
             (xr--report warnings (1- (match-beginning 3))
                         (xr--escape-string
                          (format "Unnecessarily escaped `%c'" end) nil)))
+          (when (and (eq start ?-)
+                     (not end)
+                     (match-beginning 2)
+                     (< start-pos (point) (1- (point-max))))
+            (xr--report warnings (point)
+                        "Literal `-' not first or last"))
           (if (and end (> start end))
               (xr--report warnings (point)
                           (xr--escape-string

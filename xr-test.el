@@ -367,6 +367,9 @@
                  nil))
   (should (equal (xr-lint "[^]-][]-^]")
                  '((6 . "Two-character range `]-^'"))))
+  (should (equal
+           (xr-lint "[-A-Z][A-Z-][A-Z-a][^-A-Z][]-a][A-Z---.]")
+           '((16 . "Literal `-' not first or last in character alternative"))))
   )
 
 (ert-deftest xr-skip-set ()
@@ -431,6 +434,14 @@
                  '((0 . "Empty set matches nothing"))))
   (should (equal (xr-skip-set-lint "^")
                  '((0 . "Negated empty set matches anything"))))
+  (should (equal (xr-skip-set-lint "A-Z-")
+                 nil))
+  (should (equal (xr-skip-set-lint "-A-Z")
+                 nil))
+  (should (equal (xr-skip-set-lint "^-A-Z")
+                 nil))
+  (should (equal (xr-skip-set-lint "A-Z-z")
+                 '((3 . "Literal `-' not first or last"))))
 )
 
 (provide 'xr-test)
