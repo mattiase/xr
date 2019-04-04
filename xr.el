@@ -661,7 +661,10 @@
 (defun xr--parse-skip-set-buffer (warnings)
 
   ;; An ad-hoc check, but one that catches lots of mistakes.
-  (when (and (looking-at (rx "[" (one-or-more anything) "]" eos))
+  (when (and (looking-at (rx "[" (one-or-more anything) "]"
+                             (opt (any "+" "*" "?")
+                                  (opt "?"))
+                             eos))
              (not (looking-at (rx "[:" (one-or-more anything) ":]" eos))))
     (xr--report warnings (point) "Suspect skip set framed in `[...]'"))
 
