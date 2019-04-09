@@ -108,8 +108,8 @@
 
 (require 'rx)
 
-;; Add the report MESSAGE at POSITION to WARNINGS.
 (defun xr--report (warnings position message)
+  "Add the report MESSAGE at POSITION to WARNINGS."
   (when warnings
     (push (cons (1- position) message) (car warnings))))
 
@@ -299,9 +299,9 @@
                 (list 'not set)
               set))))))))
 
-;; Reverse a sequence, flatten any (seq ...) inside, and concatenate
-;; adjacent strings.
 (defun xr--rev-join-seq (sequence)
+  "Reverse a sequence, flatten any (seq ...) inside, and concatenate
+adjacent strings."
   (let ((result nil))
     (while sequence
       (let ((elem (car sequence))
@@ -409,9 +409,9 @@
                  (list operand))))
     (cons sym body)))
 
-;; Apply a repetition of {LOWER,UPPER} to OPERAND.
-;; UPPER may be nil, meaning infinity.
 (defun xr--repeat (lower upper operand)
+  "Apply a repetition of {LOWER,UPPER} to OPERAND.
+UPPER may be nil, meaning infinity."
   (when (and upper (> lower upper))
     (error "Invalid repetition interval"))
   ;; rx does not accept (= 0 ...) or (>= 0 ...), so we use 
@@ -829,9 +829,9 @@
     (goto-char (point-min))
     (xr--parse-skip-set-buffer warnings)))
 
-;; Substitute keywords in RX using HEAD-ALIST and BODY-ALIST in the
-;; head and body positions, respectively.
 (defun xr--substitute-keywords (head-alist body-alist rx)
+  "Substitute keywords in RX using HEAD-ALIST and BODY-ALIST in the
+head and body positions, respectively."
   (cond
    ((symbolp rx)
     (or (cdr (assq rx body-alist)) rx))
@@ -843,9 +843,6 @@
                   (cdr rx))))
    (t rx)))
 
-;; Alist mapping keyword dialect to (HEAD-ALIST . BODY-ALIST),
-;; or to nil if no translation should take place.
-;; The alists are mapping from the default choice.
 (defconst xr--keywords
   '((medium . nil)
     (brief . (((zero-or-more . 0+)
@@ -867,7 +864,10 @@
                  (bos  . string-start)
                  (eos  . string-end)
                  (bow  . word-start)
-                 (eow  . word-end))))))
+                 (eow  . word-end)))))
+  "Alist mapping keyword dialect to (HEAD-ALIST . BODY-ALIST),
+or to nil if no translation should take place.
+The alists are mapping from the default choice.")
 
 (defun xr--in-dialect (rx dialect)
   (let ((keywords (assq (or dialect 'medium) xr--keywords)))
@@ -952,8 +952,8 @@ If ESCAPE-PRINTABLE, also escape \\ and \", otherwise don't."
         xdigit)))
    string 'fixedcase 'literal))
 
-;; Print a rx expression to a string, unformatted.
 (defun xr--rx-to-string (rx)
+  "Print a rx expression to a string, unformatted."
   (cond
    ((eq rx '*?) "*?")                   ; Avoid unnecessary \ in symbol.
    ((eq rx '+?) "+?")
