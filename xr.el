@@ -107,6 +107,7 @@
 ;;; Code:
 
 (require 'rx)
+(require 'cl-lib)
 
 (defun xr--report (warnings position message)
   "Add the report MESSAGE at POSITION to WARNINGS."
@@ -432,6 +433,28 @@ UPPER may be nil, meaning infinity."
                  (list operand))))
     (append operator body)))
   
+(defconst xr--zero-width-assertions
+  '(bol eol bos eos bow eow word-boundary not-word-boundary
+    symbol-start symbol-end point))
+
+(defun xr--matches-empty-p (rx)
+  "Whether RX can match the empty string regardless of context."
+  (pcase rx
+    (`(,(or `seq `one-or-more `group) . ,body)
+     (cl-every #'xr--matches-empty-p body))
+    (`(or . ,body)
+     (cl-some #'xr--matches-empty-p body))
+    (`(group-n ,_ . ,body)
+     (cl-every #'xr--matches-empty-p body))
+    (`(,(or `opt `zero-or-more) . ,_)
+     t)
+    (`(repeat ,from ,_ . ,body)
+     (or (= from 0)
+         (cl-every #'xr--matches-empty-p body)))
+    (`(,(or `= `>=) ,_ . ,body)
+     (cl-every #'xr--matches-empty-p body))
+    ("" t)))
+
 (defun xr--parse-seq (warnings)
   (let ((sequence nil))                 ; reversed
     (while (not (looking-at (rx (or "\\|" "\\)" eos))))
@@ -458,11 +481,20 @@ UPPER may be nil, meaning infinity."
         (if (and sequence
                  (not (and (eq (car sequence) 'bol) (eq (preceding-char) ?^))))
             (let ((operator (match-string 0)))
-              (when (and (consp (car sequence))
-                         (memq (caar sequence)
-                               '(opt zero-or-more one-or-more +? *? ??)))
-                (xr--report warnings (match-beginning 0)
-                            "Repetition of repetition"))
+              (when warnings
+                (cond
+                 ((and (consp (car sequence))
+                       (memq (caar sequence)
+                             '(opt zero-or-more one-or-more +? *? ??)))
+                  (xr--report warnings (match-beginning 0)
+                              "Repetition of repetition"))
+                 ((memq (car sequence) xr--zero-width-assertions)
+                  (xr--report warnings (match-beginning 0)
+                              "Repetition of zero-width assertion"))
+                 ((xr--matches-empty-p (car sequence))
+                  (xr--report
+                   warnings (match-beginning 0)
+                   "Repetition of expression matching an empty string"))))
               (goto-char (match-end 0))
               (setq sequence (cons (xr--postfix operator (car sequence))
                                    (cdr sequence))))
@@ -477,11 +509,19 @@ UPPER may be nil, meaning infinity."
              sequence
              (not (and (eq (car sequence) 'bol) (eq (preceding-char) ?^))))
         (forward-char 2)
-        (when (and (consp (car sequence))
-                   (memq (caar sequence)
-                         '(opt zero-or-more one-or-more +? *? ??)))
-          (xr--report warnings (match-beginning 0)
-                      "Repetition of repetition"))
+        (when warnings
+          (cond
+           ((and (consp (car sequence))
+                 (memq (caar sequence)
+                       '(opt zero-or-more one-or-more +? *? ??)))
+            (xr--report warnings (match-beginning 0)
+                        "Repetition of repetition"))
+           ((memq (car sequence) xr--zero-width-assertions)
+            (xr--report warnings (match-beginning 0)
+                        "Repetition of zero-width assertion"))
+           ((xr--matches-empty-p (car sequence))
+            (xr--report warnings (match-beginning 0)
+                        "Repetition of expression matching an empty string"))))
         (if (looking-at (rx (opt (group (one-or-more digit)))
                             (opt (group ",")
                                  (opt (group (one-or-more digit))))

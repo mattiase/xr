@@ -370,6 +370,14 @@
   (should (equal
            (xr-lint "[-A-Z][A-Z-][A-Z-a][^-A-Z][]-a][A-Z---.]")
            '((16 . "Literal `-' not first or last in character alternative"))))
+  (should (equal
+           (xr-lint "\\(?:a*b?\\)*\\(c\\|d\\|\\)+\\(^\\|e\\)*")
+           '((10 . "Repetition of expression matching an empty string")
+             (21 . "Repetition of expression matching an empty string"))))
+  (should (equal (xr-lint "\\'*\\<?\\(?:$\\)+")
+                 '((2 . "Repetition of zero-width assertion")
+                   (5 . "Repetition of zero-width assertion")
+                   (13 . "Repetition of zero-width assertion"))))
   )
 
 (ert-deftest xr-skip-set ()
