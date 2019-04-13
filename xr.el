@@ -491,7 +491,10 @@ UPPER may be nil, meaning infinity."
                  ((memq (car sequence) xr--zero-width-assertions)
                   (xr--report warnings (match-beginning 0)
                               "Repetition of zero-width assertion"))
-                 ((xr--matches-empty-p (car sequence))
+                 ((and (xr--matches-empty-p (car sequence))
+                       ;; Rejecting repetition of the empty string
+                       ;; suppresses some false positives.
+                       (not (equal (car sequence) "")))
                   (xr--report
                    warnings (match-beginning 0)
                    "Repetition of expression matching an empty string"))))
@@ -519,7 +522,10 @@ UPPER may be nil, meaning infinity."
            ((memq (car sequence) xr--zero-width-assertions)
             (xr--report warnings (match-beginning 0)
                         "Repetition of zero-width assertion"))
-           ((xr--matches-empty-p (car sequence))
+           ((and (xr--matches-empty-p (car sequence))
+                 ;; Rejecting repetition of the empty string
+                 ;; suppresses some false positives.
+                 (not (equal (car sequence) "")))
             (xr--report warnings (match-beginning 0)
                         "Repetition of expression matching an empty string"))))
         (if (looking-at (rx (opt (group (one-or-more digit)))
