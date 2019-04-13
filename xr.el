@@ -3,7 +3,7 @@
 ;; Copyright (C) 2019 Free Software Foundation, Inc.
 
 ;; Author: Mattias Engdegård <mattiase@acm.org>
-;; Version: 1.10
+;; Version: 1.11
 ;; URL: https://github.com/mattiase/xr
 ;; Keywords: lisp, maint, regexps
 
@@ -80,6 +80,10 @@
 
 ;;; News:
 
+;; Version 1.11:
+;; - Warn about repetition of empty-matching expressions
+;; - Detect `-' not first or last in char alternatives or skip-sets
+;; - Stronger ad-hoc [...] check in skip-sets
 ;; Version 1.10:
 ;; - Warn about [[:class:]] in skip-sets
 ;; - Warn about two-character ranges like [*-+] in regexps
