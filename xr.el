@@ -667,6 +667,224 @@ UPPER may be nil, meaning infinity."
             (t 
              (cons 'seq item-seq))))))
 
+(defun xr--range-string-to-items (str)
+  "Convert a string of ranges to a list of pairs of their endpoints."
+  (let ((len (length str))
+        (ranges nil)
+        (i 0))
+    (while (< i len)
+      (push (cons (aref str i) (aref str (+ i 2)))
+            ranges)
+      (setq i (+ i 3)))
+    ranges))
+
+(defun xr--any-arg-to-items (arg)
+  "Convert an `any' argument to a list of characters, ranges (as pairs),
+and classes (symbols)."
+  ;; We know (since we built it) that x is either a symbol or
+  ;; a string, and that the string does not mix ranges and chars.
+  (cond ((symbolp arg) (list arg))
+        ((and (>= (length arg) 3)
+              (eq (aref arg 1) ?-))
+         (xr--range-string-to-items arg))
+        (t (string-to-list arg))))
+
+(defun xr--any-item-superset-p (a b)
+  "Whether A is a superset of B, both being `any' items: a character,
+a range (pair of chars), or a class (symbol)."
+  (cond
+   ((symbolp a)
+    (cond ((symbolp b) (eq a b))
+          ((eq b ?\n)
+           (memq a '(alnum alpha blank digit graph
+                     lower multibyte nonascii print punct space
+                     upper word xdigit)))))
+   ((consp a)
+    (or (and (characterp b)
+             (<= (car a) b (cdr a)))
+        (and (consp b)
+             (<= (car a) (car b) (cdr b) (cdr a)))))
+   (t
+    (and (characterp b) (eq a b)))))
+
+(defun xr--any-item-may-intersect-p (a b)
+  "Whether A intersects B, both being `any' items: a character,
+a range (pair of chars), or a class (symbol). If in doubt, return t."
+  (cond
+   ((symbolp a)
+    (cond ((eq b ?\n)
+           (not (memq a '(alnum alpha blank digit graph
+                          lower multibyte nonascii print punct space
+                          upper word xdigit))))
+          (t t)))
+   ((consp a)
+    (or (and (characterp b)
+             (<= (car a) b (cdr a)))
+        (and (consp b)
+             (<= (car a) (cdr b))
+             (<= (car b) (cdr a)))
+        (symbolp b)))
+   ;; Now a must be a character.
+   ((characterp b) (eq a b))
+   (t (xr--any-item-may-intersect-p b a))))
+
+(defun xr--char-superset-of-char-set-p (a-sets negated b-sets)
+  "Whether A-SETS, possibly NEGATED, is a superset of B-SETS.
+A-SETS and B-SETS are arguments to `any'."
+  (let ((a-items (mapcan #'xr--any-arg-to-items a-sets))
+        (b-items (mapcan #'xr--any-arg-to-items b-sets)))
+    (cl-every (lambda (b-item)
+                (if negated
+                    (not (cl-some
+                          (lambda (a-item)
+                            (xr--any-item-may-intersect-p b-item a-item))
+                          a-items))
+                  (cl-some (lambda (a-item)
+                             (xr--any-item-superset-p a-item b-item))
+                           a-items)))
+              b-items)))
+
+(defun xr--char-superset-of-rx-p (sets negated rx)
+  "Whether SETS, possibly NEGATED, is a superset of RX."
+  (pcase rx
+    (`(any . ,b-sets)
+     (xr--char-superset-of-char-set-p sets negated b-sets))
+    (`(not (any . ,b-sets))
+     (and negated
+          (xr--char-superset-of-char-set-p b-sets nil sets)))
+    ((or 'ascii 'alnum 'alpha 'blank 'cntrl 'digit 'graph
+         'lower 'multibyte 'nonascii 'print 'punct 'space
+         'unibyte 'upper 'word 'xdigit)
+     (xr--char-superset-of-char-set-p sets negated `(any ,rx)))
+    ((pred stringp)
+     (and (= (length rx) 1)
+          (xr--char-superset-of-char-set-p sets negated (list rx))))))
+
+(defun xr--single-non-newline-char-p (rx)
+  "Whether RX only matches single characters none of which is newline."
+  (pcase rx
+    ((or 'nonl 'wordchar) t)
+    (`(category ,_) t)
+    (`(syntax ,s) (not (eq s ?>)))      ; comment-end often matches newline
+    (_ (xr--char-superset-of-rx-p '("\n") t rx))))
+
+(defun xr--syntax-superset-of-rx-p (syntax negated rx)
+  "Whether SYNTAX, possibly NEGATED, is a superset of RX."
+  ;; Syntax tables vary, but we make a (quite conservative) guess.
+  (let* ((always-set
+           ;; Characters we think always will be in the syntax set.
+           '((whitespace " \t")
+             (word "A-Za-z0-9")
+             (open-parenthesis "([")
+             (close-parenthesis "])")))
+         (never-set
+           ;; Characters we think never will be in the syntax set.
+           '((whitespace "!-~")
+             (punctuation "A-Za-z0-9")
+             (open-parenthesis "\x00- A-Za-z0-9")
+             (close-parenthesis "\x00- A-Za-z0-9")))
+         (set (assq syntax (if negated never-set always-set))))
+    (and set
+         (xr--char-superset-of-rx-p (cdr set) nil rx))))
+
+(defun xr--string-to-chars (str)
+  (mapcar #'char-to-string (string-to-list str)))
+
+(defun xr--expand-strings (rx)
+  "If RX is a string or a seq of strings, convert them to seqs of
+single-character strings."
+  (cond ((consp rx)
+         (if (eq (car rx) 'seq)
+             (cons 'seq (mapcan (lambda (x)
+                                  (if (and (stringp x)
+                                           (> (length x) 1))
+                                      (xr--string-to-chars x)
+                                    (list x)))
+                                (cdr rx)))
+           rx))
+        ((and (stringp rx)
+              (> (length rx) 1))
+         (cons 'seq (xr--string-to-chars rx)))
+        (t rx)))
+
+(defun xr--superset-seq-p (a b)
+  "Whether A matches all that B matches, both lists of expressions."
+  (while (and a b (xr--superset-p (car a) (car b)))
+    (setq a (cdr a))
+    (setq b (cdr b)))
+  (and (not b)
+       (or (not a)
+           (xr--matches-empty-p (cons 'seq a)))))
+
+(defun xr--make-seq (body)
+  (if (> (length body) 1)
+      (cons 'seq body)
+    (car body)))
+
+(defun xr--superset-p (a b)
+  "Whether A matches all that B matches."
+  (setq a (xr--expand-strings a))
+  (setq b (xr--expand-strings b))
+
+  (pcase b
+    (`(or . ,b-body)
+     (cl-every (lambda (b-expr) (xr--superset-p a b-expr)) b-body))
+    (_
+     (pcase a
+       (`(any . ,sets)
+        (xr--char-superset-of-rx-p sets nil b))
+       (`(not (any . ,sets))
+        (xr--char-superset-of-rx-p sets t b))
+       ('nonl (xr--single-non-newline-char-p b))
+
+       (`(seq . ,a-body)
+        (pcase b
+          (`(seq . ,b-body)
+           (xr--superset-seq-p a-body b-body))
+          (_
+           (xr--superset-seq-p a-body (list b)))))
+       (`(or . ,a-body)
+        (cl-some (lambda (a-expr) (xr--superset-p a-expr b)) a-body))
+
+       (`(zero-or-more . ,a-body)
+        (pcase b
+          (`(,(or 'opt 'zero-or-more 'one-or-more) . ,b-body)
+           (xr--superset-p (xr--make-seq a-body) (xr--make-seq b-body)))
+          (_ (xr--superset-p (xr--make-seq a-body) b))))
+       (`(one-or-more . ,a-body)
+        (pcase b
+          (`(one-or-more . ,b-body)
+           (xr--superset-p (xr--make-seq a-body) (xr--make-seq b-body)))
+          (_ (xr--superset-p (xr--make-seq a-body) b))))
+       (`(opt . ,a-body)
+        (pcase b
+          (`(opt . ,b-body)
+           (xr--superset-p (xr--make-seq a-body) (xr--make-seq b-body)))
+          (_ (xr--superset-p (xr--make-seq a-body) b))))
+       (`(repeat ,lo ,_ . ,a-body)
+        (if (<= lo 1)
+            (xr--superset-p (xr--make-seq a-body) b)
+          (equal a b)))
+       
+       ;; We do not expand through groups on the subset (b) side to
+       ;; avoid false positives; "\\(a\\)\\|." should be without warning.
+       (`(group . ,body)
+        (xr--superset-p (xr--make-seq body) b))
+       (`(group-n ,_ . ,body)
+        (xr--superset-p (xr--make-seq body) b))
+
+       (`(syntax ,syn)
+        (or (equal a b) (xr--syntax-superset-of-rx-p syn nil b)))
+       (`(not (syntax ,syn))
+        (or (equal a b) (xr--syntax-superset-of-rx-p syn t b)))
+
+       ((or `(category ,_) `(not (category ,cat)))
+        (or (equal a b)
+            (and (stringp b)
+                 (string-match-p (rx-to-string a) b))))
+
+       (_ (equal a b))))))
+
 (defun xr--parse-alt (warnings)
   (let ((alternatives nil))             ; reversed
     (push (xr--parse-seq warnings) alternatives)
@@ -674,8 +892,18 @@ UPPER may be nil, meaning infinity."
       (forward-char 2)                  ; skip \|
       (let ((pos (point))
             (seq (xr--parse-seq warnings)))
-        (when (and warnings (member seq alternatives))
-          (xr--report warnings pos "Duplicated alternative branch"))
+        (when warnings
+          (cond
+           ((member seq alternatives)
+            (xr--report warnings pos "Duplicated alternative branch"))
+           ((cl-some (lambda (branch) (xr--superset-p seq branch))
+                     alternatives)
+            (xr--report warnings pos
+                        "Branch matches superset of a previous branch"))
+           ((cl-some (lambda (branch) (xr--superset-p branch seq))
+                     alternatives)
+            (xr--report warnings pos
+                        "Branch matches subset of a previous branch"))))
         (push seq alternatives)))
     (if (cdr alternatives)
         ;; Simplify (or nonl "\n") to anything
