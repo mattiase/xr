@@ -878,7 +878,7 @@ single-character strings."
        (`(not (syntax ,syn))
         (or (equal a b) (xr--syntax-superset-of-rx-p syn t b)))
 
-       ((or `(category ,_) `(not (category ,cat)))
+       ((or `(category ,_) `(not (category ,_)))
         (or (equal a b)
             (and (stringp b)
                  (string-match-p (rx-to-string a) b))))
