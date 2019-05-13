@@ -258,12 +258,11 @@
       ;; wrote it that way, there was probably a reason for it.
       (let ((ranges nil)
             (chars nil))
-        (mapc (lambda (interv)
-                (if (eq (aref interv 0) (aref interv 1))
-                    (push (aref interv 0) chars)
-                  (push (string (aref interv 0) ?- (aref interv 1))
-                        ranges)))
-              sorted)
+        (dolist (interv sorted)
+          (if (eq (aref interv 0) (aref interv 1))
+              (push (aref interv 0) chars)
+            (push (string (aref interv 0) ?- (aref interv 1))
+                  ranges)))
         
         ;; Note that we return (any) for non-negated empty sets,
         ;; such as [z-a]. (any) is not accepted by rx but at least we
@@ -1081,11 +1080,10 @@ single-character strings."
      (t
       (let ((intervals nil)
             (chars nil))
-        (mapc (lambda (range)
-                (if (eq (car range) (cdr range))
-                    (push (car range) chars)
-                  (push (string (car range) ?- (cdr range)) intervals)))
-              ranges)
+        (dolist (range ranges)
+          (if (eq (car range) (cdr range))
+              (push (car range) chars)
+            (push (string (car range) ?- (cdr range)) intervals)))
         ;; Put a single `-' last.
         (when (memq ?- chars)
           (setq chars (append (delq ?- chars) (list ?-))))
