@@ -52,3 +52,12 @@ Utility:
 * See also
 
 The [[https://elpa.gnu.org/packages/relint.html][relint]] package uses xr to find regexp mistakes in elisp code.
+
+The [[https://elpa.gnu.org/packages/lex.html][lex]] package, a lexical analyser generator, provides the
+~lex-parse-re~ function which translates regexps to rx, but does not
+attempt to handle all the edge cases of Elisp's regexp syntax or
+pretty-print the result.
+
+The [[https://github.com/joddie/pcre2el][pcre2el]] package, a regexp syntax converter and interactive regexp
+explainer, can also be used for translating regexps to rx. However, xr
+is more accurate for this purpose.
