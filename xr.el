@@ -3,7 +3,7 @@
 ;; Copyright (C) 2019 Free Software Foundation, Inc.
 
 ;; Author: Mattias Engdegård <mattiase@acm.org>
-;; Version: 1.11
+;; Version: 1.12
 ;; URL: https://github.com/mattiase/xr
 ;; Keywords: lisp, maint, regexps
 
@@ -80,6 +80,8 @@
 
 ;;; News:
 
+;; Version 1.12:
+;; - Warn about branch subsumption, like [AB]\|A
 ;; Version 1.11:
 ;; - Warn about repetition of empty-matching expressions
 ;; - Detect `-' not first or last in char alternatives or skip-sets
