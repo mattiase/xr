@@ -132,7 +132,7 @@
                        (not (category base)) (category strong-left-to-right)
                        (not (category space-for-indent)))))
   (should (equal (xr "\\c%\\C+")
-                 '(seq (regexp "\\c%") (regexp "\\C+"))))
+                 '(seq (category ?%) (not (category ?+)))))
   (should-error (xr "\\c"))
   (should-error (xr "\\C"))
   )
