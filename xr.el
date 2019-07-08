@@ -483,26 +483,27 @@ UPPER may be nil, meaning infinity."
        ((looking-at (rx (group (any "*?+")) (opt "?")))
         (if (and sequence
                  (not (and (eq (car sequence) 'bol) (eq (preceding-char) ?^))))
-            (let ((operator (match-string 0)))
+            (let ((operator (match-string 0))
+                  (operand (car sequence)))
               (when warnings
                 (cond
-                 ((and (consp (car sequence))
-                       (memq (caar sequence)
+                 ((and (consp operand)
+                       (memq (car operand)
                              '(opt zero-or-more one-or-more +? *? ??)))
                   (xr--report warnings (match-beginning 0)
                               "Repetition of repetition"))
-                 ((memq (car sequence) xr--zero-width-assertions)
+                 ((memq operand xr--zero-width-assertions)
                   (xr--report warnings (match-beginning 0)
                               "Repetition of zero-width assertion"))
-                 ((and (xr--matches-empty-p (car sequence))
+                 ((and (xr--matches-empty-p operand)
                        ;; Rejecting repetition of the empty string
                        ;; suppresses some false positives.
-                       (not (equal (car sequence) "")))
+                       (not (equal operand "")))
                   (xr--report
                    warnings (match-beginning 0)
                    "Repetition of expression matching an empty string"))))
               (goto-char (match-end 0))
-              (setq sequence (cons (xr--postfix operator (car sequence))
+              (setq sequence (cons (xr--postfix operator operand)
                                    (cdr sequence))))
           (let ((literal (match-string 1)))
             (goto-char (match-end 1))
@@ -515,44 +516,45 @@ UPPER may be nil, meaning infinity."
              sequence
              (not (and (eq (car sequence) 'bol) (eq (preceding-char) ?^))))
         (forward-char 2)
-        (when warnings
-          (cond
-           ((and (consp (car sequence))
-                 (memq (caar sequence)
-                       '(opt zero-or-more one-or-more +? *? ??)))
-            (xr--report warnings (match-beginning 0)
-                        "Repetition of repetition"))
-           ((memq (car sequence) xr--zero-width-assertions)
-            (xr--report warnings (match-beginning 0)
-                        "Repetition of zero-width assertion"))
-           ((and (xr--matches-empty-p (car sequence))
-                 ;; Rejecting repetition of the empty string
-                 ;; suppresses some false positives.
-                 (not (equal (car sequence) "")))
-            (xr--report warnings (match-beginning 0)
-                        "Repetition of expression matching an empty string"))))
-        (if (looking-at (rx (opt (group (one-or-more digit)))
-                            (opt (group ",")
-                                 (opt (group (one-or-more digit))))
-                            "\\}"))
-            (let ((lower (if (match-string 1)
-                             (string-to-number (match-string 1))
-                           0))
-                  (comma (match-string 2))
-                  (upper (and (match-string 3)
-                              (string-to-number (match-string 3)))))
-              (unless (or (match-beginning 1) (match-string 3))
-                (xr--report warnings (- (match-beginning 0) 2)
-                            (if comma
-                                "Uncounted repetition"
+        (let ((operand (car sequence)))
+          (when warnings
+            (cond
+             ((and (consp operand)
+                   (memq (car operand)
+                         '(opt zero-or-more one-or-more +? *? ??)))
+              (xr--report warnings (match-beginning 0)
+                          "Repetition of repetition"))
+             ((memq operand xr--zero-width-assertions)
+              (xr--report warnings (match-beginning 0)
+                          "Repetition of zero-width assertion"))
+             ((and (xr--matches-empty-p operand)
+                   ;; Rejecting repetition of the empty string
+                   ;; suppresses some false positives.
+                   (not (equal operand "")))
+              (xr--report
+               warnings (match-beginning 0)
+               "Repetition of expression matching an empty string"))))
+          (if (looking-at (rx (opt (group (one-or-more digit)))
+                              (opt (group ",")
+                                   (opt (group (one-or-more digit))))
+                              "\\}"))
+              (let ((lower (if (match-string 1)
+                               (string-to-number (match-string 1))
+                             0))
+                    (comma (match-string 2))
+                    (upper (and (match-string 3)
+                                (string-to-number (match-string 3)))))
+                (unless (or (match-beginning 1) (match-string 3))
+                  (xr--report warnings (- (match-beginning 0) 2)
+                              (if comma
+                                  "Uncounted repetition"
                                 "Implicit zero repetition")))
-              (goto-char (match-end 0))
-              (setq sequence (cons (xr--repeat
-                                    lower
-                                    (if comma upper lower)
-                                    (car sequence))
-                                   (cdr sequence))))
-          (error "Invalid \\{\\} syntax")))
+                (goto-char (match-end 0))
+                (setq sequence (cons (xr--repeat lower
+                                                 (if comma upper lower)
+                                                 operand)
+                                     (cdr sequence))))
+            (error "Invalid \\{\\} syntax"))))
 
        ;; nonspecial character
        ((looking-at (rx (not (any "\\.["))))
