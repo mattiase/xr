@@ -443,18 +443,18 @@ UPPER may be nil, meaning infinity."
 (defun xr--matches-empty-p (rx)
   "Whether RX can match the empty string regardless of context."
   (pcase rx
-    (`(,(or `seq `one-or-more `group) . ,body)
+    (`(,(or 'seq 'one-or-more 'group) . ,body)
      (cl-every #'xr--matches-empty-p body))
     (`(or . ,body)
      (cl-some #'xr--matches-empty-p body))
     (`(group-n ,_ . ,body)
      (cl-every #'xr--matches-empty-p body))
-    (`(,(or `opt `zero-or-more) . ,_)
+    (`(,(or 'opt 'zero-or-more) . ,_)
      t)
     (`(repeat ,from ,_ . ,body)
      (or (= from 0)
          (cl-every #'xr--matches-empty-p body)))
-    (`(,(or `= `>=) ,_ . ,body)
+    (`(,(or '= '>=) ,_ . ,body)
      (cl-every #'xr--matches-empty-p body))
     ("" t)))
 
