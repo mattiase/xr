@@ -1230,22 +1230,70 @@ If ESCAPE-PRINTABLE, also escape \\ and \", otherwise don't."
         xdigit)))
    string 'fixedcase 'literal))
 
+(defun xr--take (n list)
+  "The N first elements of LIST."
+  (butlast list (- (length list) n)))
+
+(defun xr--rx-list-to-string (rx plain-prefix)
+  "Print the list `rx' to a string, unformatted.
+The first PLAIN-PREFIX elements are formatted using `prin1-to-string';
+the rest with `xr--rx-to-string'."
+  (concat "("
+          (mapconcat #'identity
+                     (append
+                      (mapcar #'prin1-to-string (xr--take plain-prefix rx))
+                      (mapcar #'xr--rx-to-string (nthcdr plain-prefix rx)))
+                     " ")
+          ")"))
+
 (defun xr--rx-to-string (rx)
-  "Print a rx expression to a string, unformatted."
+  "Print an rx expression to a string, unformatted."
   (cond
    ((eq rx '*?) "*?")                   ; Avoid unnecessary \ in symbol.
    ((eq rx '+?) "+?")
-   ((consp rx)
-    ;; Render the characters SPC and ? as ? and ?? when first in a list.
-    ;; Elsewhere, they are just integers.
-    (let ((first (cond ((eq (car rx) ?\s) "?")
-                       ((eq (car rx) ??) "??")
-                       (t (xr--rx-to-string (car rx)))))
+   ((eq rx '\??) "\\??")
+   ((stringp rx) (concat "\"" (xr--escape-string rx t) "\""))
+   ((characterp rx)
+    (let ((esc (assq rx '((?\( . ?\()
+                          (?\) . ?\))
+                          (?\[ . ?\[)
+                          (?\] . ?\])
+                          (?\\ . ?\\)
+                          (?\; . ?\;)
+                          (?\" . ?\")
+                          (?\s . ?s)
+                          (?\n . ?n)
+                          (?\r . ?r)
+                          (?\t . ?t)
+                          (?\e . ?e)
+                          (?\b . ?b)
+                          (?\f . ?f)
+                          (?\v . ?v)))))
+      (cond (esc (format "?\\%c" (cdr esc)))
+            ;; Only base characters are displayed as ?char; this excludes
+            ;; controls, combining, surrogates, noncharacters etc.
+            ((aref (char-category-set rx) ?.) (format "?%c" rx))
+            (t (format "#x%02x" rx)))))
+   ((atom rx) (prin1-to-string rx))
+   ((nlistp (cdr rx))
+    (format "(%s . %s)"
+            (xr--rx-to-string (car rx))
+            (xr--rx-to-string (cdr rx))))
+   ((or (eq (car rx) '**)
+        (and (eq (car rx) 'repeat) (> (length rx) 3)))
+    ;; First 2 args are integers.
+    (xr--rx-list-to-string rx 3))
+   ((memq (car rx) '(= >= repeat group-n backref))
+    ;; First arg is integer.
+    (xr--rx-list-to-string rx 2))
+   (t
+    ;; Render the space character as ? when first in a list.
+    ;; Elsewhere, it's a character or integer.
+    (let ((first (if (eq (car rx) ?\s)
+                     "?"
+                   (xr--rx-to-string (car rx))))
           (rest (mapcar #'xr--rx-to-string (cdr rx))))
-      (concat "(" (mapconcat #'identity (cons first rest) " ") ")")))
-   ((stringp rx)
-    (concat "\"" (xr--escape-string rx t) "\""))
-   (t (prin1-to-string rx))))
+      (concat "(" (mapconcat #'identity (cons first rest) " ") ")")))))
 
 (defun xr-pp-rx-to-str (rx)
   "Pretty-print the regexp RX (in rx notation) to a string.
@@ -1258,10 +1306,8 @@ It does a slightly better job than standard `pp' for rx purposes."
     ;; readability and compactness.
     (goto-char (point-min))
     (while (re-search-forward
-            (rx "("
-                (or "not" "0+" "1+" "*" "+" "?" "opt" "seq" ":" "|" "or"
-                    "??" "*?" "+?" "=" ">=" "**")
-                (group "\n" (zero-or-more (any space))))
+            (rx "(" (** 1 4 (any "a-z0-9" "+?:|*=>"))
+                (group "\n" (zero-or-more blank)))
             nil t)
       (replace-match " " t t nil 1))
     
