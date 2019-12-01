@@ -3,7 +3,7 @@
 ;; Copyright (C) 2019 Free Software Foundation, Inc.
 
 ;; Author: Mattias Engdegård <mattiase@acm.org>
-;; Version: 1.13
+;; Version: 1.14
 ;; URL: https://github.com/mattiase/xr
 ;; Keywords: lisp, maint, regexps
 
@@ -80,6 +80,8 @@
 
 ;;; News:
 
+;; Version 1.14:
+;; - Warn about repetition of grouped repetition
 ;; Version 1.13:
 ;; - More robust pretty-printing, especially for characters
 ;; - Generate (category CHAR) for unknown categories
