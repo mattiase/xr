@@ -4,8 +4,9 @@
 
 ;; Author: Mattias Engdegård <mattiase@acm.org>
 ;; Version: 1.14
+;; Package-Requires: ((emacs "24.3"))
 ;; URL: https://github.com/mattiase/xr
-;; Keywords: lisp, maint, regexps
+;; Keywords: lisp, regexps
 
 ;; This program is free software; you can redistribute it and/or modify
 ;; it under the terms of the GNU General Public License as published by
