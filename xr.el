@@ -4,7 +4,7 @@
 
 ;; Author: Mattias Engdegård <mattiase@acm.org>
 ;; Version: 1.14
-;; Package-Requires: ((emacs "24.3"))
+;; Package-Requires: ((emacs "26.1"))
 ;; URL: https://github.com/mattiase/xr
 ;; Keywords: lisp, regexps
 
