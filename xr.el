@@ -3,7 +3,7 @@
 ;; Copyright (C) 2019 Free Software Foundation, Inc.
 
 ;; Author: Mattias Engdegård <mattiase@acm.org>
-;; Version: 1.14
+;; Version: 1.15
 ;; Package-Requires: ((emacs "26.1"))
 ;; URL: https://github.com/mattiase/xr
 ;; Keywords: lisp, regexps
@@ -81,6 +81,8 @@
 
 ;;; News:
 
+;; Version 1.15:
+;; - Warn about subsuming repetitions in sequence, like [AB]+A*
 ;; Version 1.14:
 ;; - Warn about repetition of grouped repetition
 ;; Version 1.13:
