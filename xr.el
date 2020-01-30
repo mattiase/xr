@@ -467,7 +467,7 @@ UPPER may be nil, meaning infinity."
 (defun xr--parse-seq (warnings)
   (let ((sequence nil))                 ; reversed
     (while (not (looking-at (rx (or "\\|" "\\)" eos))))
-      (let ((_item-start (point)))
+      (let ((item-start (point)))
         (cond
          ;; ^ - only special at beginning of sequence
          ((looking-at (rx "^"))
@@ -694,7 +694,40 @@ UPPER may be nil, meaning infinity."
                         (format "Escaped non-special character `%s'"
                                 (xr--escape-string (match-string 2) nil)))))
 
-         (t (error "Backslash at end of regexp")))))
+         (t (error "Backslash at end of regexp")))
+
+        (when (and warnings (cdr sequence))
+          ;; Check for subsuming repetitions in sequence: (Rx X) (Ry Y)
+          ;; where Rx and Ry are repetition operators, and X and Y are operands.
+          ;; We conclude that (Rx X) subsumes (Ry Y) if Rx can match
+          ;; infinitely many times, Ry can match zero times,
+          ;; and X matches a superset of Y. Example: [ab]+a?
+          (let* ((item (car sequence))
+                 (expr (and (consp item)
+                            (memq (car item)
+                                  '(zero-or-more one-or-more opt *? +? ??))
+                            (xr--make-seq (cdr item)))))
+            (when expr
+              (let* ((prev-item (cadr sequence))
+                     (prev-expr
+                      (and (consp prev-item)
+                           (memq (car prev-item)
+                                 '(zero-or-more one-or-more opt *? +? ??))
+                           (xr--make-seq (cdr prev-item)))))
+                (when prev-expr
+                  (cond
+                   ((and (memq (car item) '(zero-or-more opt *? ??))
+                         (memq (car prev-item)
+                               '(zero-or-more one-or-more *? +?))
+                         (xr--superset-p prev-expr expr))
+                    (xr--report warnings item-start
+                                "Repetition subsumed by preceding repetition"))
+                   ((and (memq (car prev-item) '(zero-or-more opt *? ??))
+                         (memq (car item) '(zero-or-more one-or-more *? +?))
+                         (xr--superset-p expr prev-expr))
+                    (xr--report
+                     warnings item-start
+                     "Repetition subsumes preceding repetition"))))))))))
 
     (let ((item-seq (xr--rev-join-seq sequence)))
       (cond ((null item-seq)
