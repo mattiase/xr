@@ -139,12 +139,14 @@
         (if (>= end ?\])
             (push (vector ?\] end (point)) intervals)
           (xr--report warnings (point)
-                      (format "Reversed range `%s' matches nothing"
-                              (xr--escape-string (match-string 0) nil))))
+                      (format-message
+                       "Reversed range `%s' matches nothing"
+                       (xr--escape-string (match-string 0) nil))))
         (when (eq end ?^)
           (xr--report warnings (point)
-                      (format "Two-character range `%s'"
-                              (xr--escape-string (match-string 0) nil)))))
+                      (format-message
+                       "Two-character range `%s'"
+                       (xr--escape-string (match-string 0) nil)))))
       (goto-char (match-end 0)))
      ;; Initial ]
      ((looking-at "]")
@@ -163,7 +165,8 @@
             (error "No character class `%s'" (match-string 0)))
           (if (memq sym classes)
               (xr--report warnings (point)
-                          (format "Duplicated character class `[:%s:]'" sym))
+                          (format-message
+                           "Duplicated character class `[:%s:]'" sym))
             (push sym classes))
           (goto-char (match-end 0))))
        ;; character range
@@ -177,14 +180,16 @@
            ((and (eq start ?z) (eq end ?a)))
            (t
             (xr--report warnings (point)
-                        (format "Reversed range `%s' matches nothing"
-                                (xr--escape-string (match-string 0) nil)))))
+                        (format-message
+                         "Reversed range `%s' matches nothing"
+                         (xr--escape-string (match-string 0) nil)))))
           ;; Suppress warnings about ranges between adjacent digits,
           ;; like [0-1], as they are common and harmless.
           (when (and (= end (1+ start)) (not (<= ?0 start end ?9)))
             (xr--report warnings (point)
-                        (format "Two-character range `%s'"
-                                (xr--escape-string (match-string 0) nil))))
+                        (format-message
+                         "Two-character range `%s'"
+                         (xr--escape-string (match-string 0) nil))))
           (goto-char (match-end 0))))
        ((looking-at (rx eos))
         (error "Unterminated character alternative"))
@@ -205,12 +210,13 @@
                      (not (and intervals
                                (eq (aref (car (last intervals)) 0) ?\]))))
             (xr--report warnings (point)
-                        "Suspect `[' in char alternative"))
+                        (format-message "Suspect `[' in char alternative")))
           (when (and (looking-at (rx "-" (not (any "]"))))
                      (> (point) start-pos))
             (xr--report
              warnings (point)
-             "Literal `-' not first or last in character alternative"))
+             (format-message
+              "Literal `-' not first or last in character alternative")))
           (push (vector ch ch (point)) intervals))
         (forward-char 1))))
 
@@ -231,33 +237,37 @@
                     ((and (eq (aref this 0) (aref this 1))
                           (eq (aref next 0) (aref next 1)))
                      (setcdr s (cddr s))
-                     (format "Duplicated `%c' inside character alternative"
-                             (aref this 0)))
+                     (format-message
+                      "Duplicated `%c' inside character alternative"
+                      (aref this 0)))
                     ;; Duplicate range: drop it and warn.
                     ((and (eq (aref this 0) (aref next 0))
                           (eq (aref this 1) (aref next 1)))
                      (setcdr s (cddr s))
-                     (format "Duplicated `%c-%c' inside character alternative"
-                             (aref this 0) (aref this 1)))
+                     (format-message
+                      "Duplicated `%c-%c' inside character alternative"
+                      (aref this 0) (aref this 1)))
                     ;; Character in range: drop it and warn.
                     ((eq (aref this 0) (aref this 1))
                      (setcar s next)
                      (setcdr s (cddr s))
-                     (format "Character `%c' included in range `%c-%c'"
-                             (aref this 0) (aref next 0) (aref next 1)))
+                     (format-message
+                      "Character `%c' included in range `%c-%c'"
+                      (aref this 0) (aref next 0) (aref next 1)))
                     ;; Same but other way around.
                     ((eq (aref next 0) (aref next 1))
                      (setcdr s (cddr s))
-                     (format "Character `%c' included in range `%c-%c'"
-                             (aref next 0) (aref this 0) (aref this 1)))
+                     (format-message
+                      "Character `%c' included in range `%c-%c'"
+                      (aref next 0) (aref this 0) (aref this 1)))
                     ;; Overlapping ranges: merge and warn.
                     (t
                      (let ((this-end (aref this 1)))
                        (aset this 1 (max (aref this 1) (aref next 1)))
                        (setcdr s (cddr s))
-                       (format "Ranges `%c-%c' and `%c-%c' overlap"
-                               (aref this 0) this-end
-                               (aref next 0) (aref next 1)))))))
+                       (format-message "Ranges `%c-%c' and `%c-%c' overlap"
+                                       (aref this 0) this-end
+                                       (aref next 0) (aref next 1)))))))
               (xr--report warnings (max (aref this 2) (aref next 2))
                           (xr--escape-string message nil)))))
         (setq s (cdr s)))
@@ -476,7 +486,8 @@ UPPER may be nil, meaning infinity."
           (forward-char 1)
           (if (null sequence)
               (push 'bol sequence)
-            (xr--report warnings (match-beginning 0) "Unescaped literal `^'")
+            (xr--report warnings (match-beginning 0)
+                        (format-message "Unescaped literal `^'"))
             (push "^" sequence)))
 
          ;; $ - only special at end of sequence
@@ -484,7 +495,8 @@ UPPER may be nil, meaning infinity."
           (forward-char 1)
           (if (looking-at (rx (or "\\|" "\\)" eos)))
               (push 'eol sequence)
-            (xr--report warnings (match-beginning 0) "Unescaped literal `$'")
+            (xr--report warnings (match-beginning 0)
+                        (format-message "Unescaped literal `$'"))
             (push "$" sequence)))
 
          ;; * ? + (and non-greedy variants)
@@ -534,7 +546,7 @@ UPPER may be nil, meaning infinity."
             (let ((literal (match-string 1)))
               (goto-char (match-end 1))
               (xr--report warnings (match-beginning 0)
-                          (format "Unescaped literal `%s'" literal))
+                          (format-message "Unescaped literal `%s'" literal))
               (push literal sequence))))
 
          ;; \{..\} - not special at beginning of sequence or after ^
@@ -693,7 +705,7 @@ UPPER may be nil, meaning infinity."
             ;; Note that we do not warn about \\], since the symmetry with \\[
             ;; makes it unlikely to be a serious error.
             (xr--report warnings (match-beginning 0)
-                        (format "Escaped non-special character `%s'"
+                        (format-message "Escaped non-special character `%s'"
                                 (xr--escape-string (match-string 2) nil)))))
 
          (t (error "Backslash at end of regexp")))
@@ -1016,7 +1028,8 @@ single-character strings."
                                   (opt "?"))
                              eos))
              (not (looking-at (rx "[:" (one-or-more anything) ":]" eos))))
-    (xr--report warnings (point) "Suspect skip set framed in `[...]'"))
+    (xr--report warnings (point)
+                (format-message "Suspect skip set framed in `[...]'")))
 
   (let ((negated (looking-at (rx "^")))
         (start-pos (point))
@@ -1038,11 +1051,12 @@ single-character strings."
           (when (and (eq (char-before) ?\[)
                      (eq (char-after (match-end 0)) ?\]))
             (xr--report warnings (1- (point))
-                        "Suspect character class framed in `[...]'"))
+                        (format-message
+                         "Suspect character class framed in `[...]'")))
           (when (memq sym classes)
             (xr--report warnings (point)
-                        (format "Duplicated character class `%s'"
-                                (match-string 0))))
+                        (format-message "Duplicated character class `%s'"
+                                        (match-string 0))))
           (push sym classes)))
 
        ((looking-at (rx (or (seq "\\" (group anything))
@@ -1060,32 +1074,37 @@ single-character strings."
                      (not (memq start '(?^ ?- ?\\))))
             (xr--report warnings (point)
                         (xr--escape-string
-                         (format "Unnecessarily escaped `%c'" start) nil)))
+                         (format-message "Unnecessarily escaped `%c'" start)
+                         nil)))
           (when (and (match-beginning 3)
                      (not (memq end '(?^ ?- ?\\))))
             (xr--report warnings (1- (match-beginning 3))
                         (xr--escape-string
-                         (format "Unnecessarily escaped `%c'" end) nil)))
+                         (format-message "Unnecessarily escaped `%c'" end)
+                         nil)))
           (when (and (eq start ?-)
                      (not end)
                      (match-beginning 2)
                      (< start-pos (point) (1- (point-max))))
             (xr--report warnings (point)
-                        "Literal `-' not first or last"))
+                        (format-message "Literal `-' not first or last")))
           (if (and end (> start end))
               (xr--report warnings (point)
                           (xr--escape-string
-                           (format "Reversed range `%c-%c'" start end) nil))
+                           (format-message "Reversed range `%c-%c'" start end)
+                           nil))
             (cond
              ((eq start end)
               (xr--report warnings (point)
                           (xr--escape-string
-                           (format "Single-element range `%c-%c'" start end)
+                           (format-message "Single-element range `%c-%c'"
+                                           start end)
                            nil)))
              ((eq (1+ start) end)
               (xr--report warnings (point)
                           (xr--escape-string
-                           (format "Two-element range `%c-%c'" start end)
+                           (format-message "Two-element range `%c-%c'"
+                                           start end)
                            nil))))
             (let ((tail ranges))
               (while tail
@@ -1096,18 +1115,20 @@ single-character strings."
                              (cond
                               ((and end (< start end)
                                     (< (car range) (cdr range)))
-                               (format "Ranges `%c-%c' and `%c-%c' overlap"
-                                       (car range) (cdr range) start end))
+                               (format-message
+                                "Ranges `%c-%c' and `%c-%c' overlap"
+                                (car range) (cdr range) start end))
                               ((and end (< start end))
-                               (format "Range `%c-%c' includes character `%c'"
-                                       start end (car range)))
+                               (format-message
+                                "Range `%c-%c' includes character `%c'"
+                                start end (car range)))
                               ((< (car range) (cdr range))
-                               (format
+                               (format-message
                                 "Character `%c' included in range `%c-%c'"
                                 start (car range) (cdr range)))
                               (t
-                               (format "Duplicated character `%c'"
-                                       start)))))
+                               (format-message "Duplicated character `%c'"
+                                               start)))))
                         (xr--report warnings (point)
                                     (xr--escape-string msg nil))
                         ;; Expand previous interval to include this range.
@@ -1121,7 +1142,7 @@ single-character strings."
 
        ((looking-at (rx "\\" eos))
         (xr--report warnings (point)
-                    "Stray `\\' at end of string")))
+                    (format-message "Stray `\\' at end of string"))))
 
       (goto-char (match-end 0)))
 
