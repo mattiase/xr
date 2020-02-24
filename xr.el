@@ -713,9 +713,13 @@ UPPER may be nil, meaning infinity."
         (when (and warnings (cdr sequence))
           ;; Check for subsuming repetitions in sequence: (Rx X) (Ry Y)
           ;; where Rx and Ry are repetition operators, and X and Y are operands.
-          ;; We conclude that (Rx X) subsumes (Ry Y) if Rx can match
-          ;; infinitely many times, Ry can match zero times,
-          ;; and X matches a superset of Y. Example: [ab]+a?
+          ;; We conclude that (Rx X) subsumes (Ry Y), in the sense that the
+          ;; sequence is equivalent to just (Rx X), if:
+          ;;       X matches a superset of Y
+          ;;   and Rx can match infinitely many times
+          ;;   and Ry can match zero times
+          ;;   and Ry is non-greedy if Rx is non-greedy.
+          ;; Example: [ab]+a?
           (let* ((item (car sequence))
                  (expr (and (consp item)
                             (memq (car item)
@@ -729,19 +733,26 @@ UPPER may be nil, meaning infinity."
                                  '(zero-or-more one-or-more opt *? +? ??))
                            (xr--make-seq (cdr prev-item)))))
                 (when prev-expr
-                  (cond
-                   ((and (memq (car item) '(zero-or-more opt *? ??))
-                         (memq (car prev-item)
-                               '(zero-or-more one-or-more *? +?))
-                         (xr--superset-p prev-expr expr))
-                    (xr--report warnings item-start
-                                "Repetition subsumed by preceding repetition"))
-                   ((and (memq (car prev-item) '(zero-or-more opt *? ??))
-                         (memq (car item) '(zero-or-more one-or-more *? +?))
-                         (xr--superset-p expr prev-expr))
-                    (xr--report
-                     warnings item-start
-                     "Repetition subsumes preceding repetition"))))))))))
+                  (let ((op (car item))
+                        (prev-op (car prev-item)))
+                    ;; Test the same condition twice, but mirrored.
+                    (cond
+                     ((and (memq op '(zero-or-more opt *? ??))
+                           (memq prev-op '(zero-or-more one-or-more *? +?))
+                           (not (and (memq prev-op '(*? +?))
+                                     (memq op '(zero-or-more opt))))
+                           (xr--superset-p prev-expr expr))
+                      (xr--report
+                       warnings item-start
+                       "Repetition subsumed by preceding repetition"))
+                     ((and (memq prev-op '(zero-or-more opt *? ??))
+                           (memq op '(zero-or-more one-or-more *? +?))
+                           (not (and (memq op '(*? +?))
+                                     (memq prev-op '(zero-or-more opt))))
+                           (xr--superset-p expr prev-expr))
+                      (xr--report
+                       warnings item-start
+                       "Repetition subsumes preceding repetition")))))))))))
 
     (let ((item-seq (xr--rev-join-seq sequence)))
       (cond ((null item-seq)
