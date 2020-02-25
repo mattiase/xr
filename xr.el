@@ -726,28 +726,118 @@ UPPER may be nil, meaning infinity."
 and classes (symbols)."
   ;; We know (since we built it) that x is either a symbol or
   ;; a string, and that the string does not mix ranges and chars.
-  (cond ((symbolp arg) (list arg))
+  (cond ((symbolp arg)
+         ;; unibyte and multibyte are aliases of ascii and nonascii in
+         ;; practice; simplify.
+         (list (cond ((eq arg 'unibyte) 'ascii)
+                     ((eq arg 'multibyte) 'nonascii)
+                     (t arg))))
         ((and (>= (length arg) 3)
               (eq (aref arg 1) ?-))
          (xr--range-string-to-items arg))
         (t (string-to-list arg))))
+
+;; Character class relation matrix
+;; Legend:  = same
+;;          ⊂ row subset of column
+;;          ⊃ row superset of column
+;;          x overlapping
+;;          ∅ disjoint
+;;          ? not certain but very likely
+;;          * assuming `case-fold-search' is nil
+;;
+;;         alp aln dig xdi cnt asc non bla gra pri pun upp low spa wor
+;; alpha    =   ⊂   ∅   x   ∅   x   x   ∅   ⊂   ⊂   ∅?  ⊃?  ⊃?  ∅?  ⊂?
+;; alnum    ⊃   =   ⊃   ⊃   ∅   x   x   ∅   ⊂   ⊂   ∅?  ⊃?  ⊃?  ∅?  ⊂?
+;; digit    ∅   ⊂   =   ⊂   ∅   ⊂   ∅   ∅   ⊂   ⊂   ∅   ∅?  ∅?  ∅?  ⊂?
+;; xdigit   x   ⊂   ⊃   =   ∅   ⊂   ∅   ∅   ⊂   ⊂   ∅   x?  x?  ∅?  ⊂?
+;; cntrl    ∅   ∅   ∅   ∅   =   ⊂   ∅   x   ∅   ∅   ∅   ∅?  ∅?  x?  ∅?
+;; ascii    x   x   ⊃   ⊃   ⊃   =   ∅   x   x   x   x   x?  x?  x?  x?
+;; nonascii x   x   ∅   ∅   ∅   ∅   =   x   x   x   x?  x?  x?  x?  x?
+;; blank    ∅   ∅   ∅   ∅   x   x   x   =   ∅   x   x?  ∅?  ∅?  x?  ∅?
+;; graph    ⊃   ⊃   ⊃   ⊃   ∅   x   x   ∅   =   ⊂   ⊃?  ⊃?  ⊃?  ∅?  ⊃?
+;; print    ⊃   ⊃   ⊃   ⊃   ∅   x   x   x   ⊃   =   ⊃?  ⊃?  ⊃?  x?  ⊃?
+;; punct    ∅?  ∅?  ∅   ∅   ∅   x   x?  x?  ⊂?  ⊂?  =   ∅?  ∅?  ∅?  x?
+;; upper    ⊂?  ⊂?  ∅?  x?  ∅?  x?  x?  ∅?  ⊂?  ⊂?  ∅?  =   ∅*  ∅?  ⊂?
+;; lower    ⊂?  ⊂?  ∅?  x?  ∅?  x?  x?  ∅?  ⊂?  ⊂?  ∅?  ∅*  =   ∅?  ⊂?
+;; space    ∅?  ∅?  ∅?  ∅?  x?  x?  x?  x?  ∅?  x?  ∅?  ∅?  ∅?  =   ∅
+;; word     ⊃?  ⊃?  ⊃?  ⊃?  ∅?  x?  x?  ∅?  ⊂?  ⊂?  x?  ⊃?  ⊃?  ∅   =
 
 (defun xr--any-item-superset-p (a b)
   "Whether A is a superset of B, both being `any' items: a character,
 a range (pair of chars), or a class (symbol)."
   (cond
    ((symbolp a)
-    (cond ((symbolp b) (eq a b))
-          ((eq b ?\n)
-           (memq a '(alnum alpha blank digit graph
-                     lower multibyte nonascii print punct space
-                     upper word xdigit)))))
+    (cond
+     ((symbolp b)
+      (or (eq a b)
+          (memq
+           b
+           (cdr (assq
+                 a
+                 ;; Class superset matrix: first class in each row is
+                 ;; a superset of all the rest in that row.
+                 ;; It is slightly approximative, since upper, lower
+                 ;; and (partially) punct can be modified through case
+                 ;; and syntax tables.
+                 '((alpha upper lower)
+                   (alnum alpha digit xdigit upper lower)
+                   (xdigit digit)
+                   (ascii digit xdigit cntrl)
+                   (graph alpha alnum digit xdigit punct upper lower word)
+                   (print alpha alnum digit xdigit graph punct
+                          upper lower word)
+                   (word alpha alnum digit xdigit upper lower)))))))
+
+     ((characterp b)
+      (cond
+       ;; Some reasonable subsets of `space' and `word'.
+       ((eq a 'space) (memq b '(?\s ?\t ?\f)))
+       ((eq a 'word)
+        (string-match-p (rx (any "0-9A-Za-z")) (char-to-string b)))
+       ;; Test for invariant classes only. `punct' is invariant for ASCII.
+       ;; `upper' and `lower' are not really invariant but mostly.
+       ((or (memq a '(digit xdigit cntrl ascii nonascii alpha alnum blank
+                            graph print upper lower))
+            (and (eq a 'punct) (<= b 127)))
+        (string-match-p (format "[[:%s:]]" a) (char-to-string b)))))
+
+     (t   ; b is a range.
+      ;; For simplicity, only check ASCII ranges.
+      (and (<= (cdr b) 127)
+           (cl-some
+            (lambda (a-range) (and (<= (car a-range) (car b))
+                                   (<= (cdr b) (cdr a-range))))
+            (cdr (assq a '((alpha (?A . ?Z) (?a . ?z))
+                           (alnum (?0 . ?9) (?A . ?Z) (?a . ?z))
+                           (digit (?0 . ?9))
+                           (xdigit (?0 . ?9) (?A . ?F) (?a . ?f))
+                           (cntrl (0 . 31))
+                           (ascii (0 . 127))
+                           (graph (33 . 126))
+                           (print (32 . 126))
+                           (punct (33 . 47) (58 . 64) (91 . 96) (123 . 126))
+                           ;; Not-so-wild assumptions.
+                           (upper (?A . ?Z))
+                           (lower (?a . ?z))
+                           (word (?0 . ?9) (?A . ?Z) (?a . ?z))
+                           (space (?\s . ?\s) (?\t . ?\t) (?\f . ?\f))))))))))
+   
    ((consp a)
-    (or (and (characterp b)
-             (<= (car a) b (cdr a)))
-        (and (consp b)
-             (<= (car a) (car b) (cdr b) (cdr a)))))
-   (t
+    (cond
+     ((characterp b) (<= (car a) b (cdr a)))
+     ((consp b) (<= (car a) (car b) (cdr b) (cdr a)))
+     (t   ; b is a class.
+      ;; Only consider classes with simple definitions.
+      (let ((b-hull (cdr (assq b '((digit . (?0 . ?9))
+                                   (xdigit . (?0 . ?f))
+                                   (cntrl . (0 . 31))
+                                   (ascii . (0 . 127))
+                                   (nonascii . (#x80 . #x10ffff)))))))
+        (and b-hull
+             (<= (car a) (car b-hull))
+             (<= (cdr b-hull) (cdr a)))))))
+   (t   ; a is a character.
     (and (characterp b) (eq a b)))))
 
 (defun xr--any-item-may-intersect-p (a b)
@@ -755,18 +845,89 @@ a range (pair of chars), or a class (symbol)."
 a range (pair of chars), or a class (symbol). If in doubt, return t."
   (cond
    ((symbolp a)
-    (cond ((eq b ?\n)
-           (not (memq a '(alnum alpha blank digit graph
-                          lower multibyte nonascii print punct space
-                          upper word xdigit))))
-          (t t)))
+    (cond
+     ((symbolp b)
+      (or (eq a b)
+          (memq
+           b
+           (cdr (assq
+                 a
+                 ;; Class intersection matrix: first class in each row
+                 ;; intersects all the rest in that row.
+                 ;; Again slightly approximate, since upper, lower,
+                 ;; space, word and (partially) punct can be modified
+                 ;; through syntax and case tables.
+                 '((alpha alnum xdigit ascii nonascii graph print
+                          upper lower word)
+                   (alnum alpha digit xdigit ascii nonascii graph print
+                          upper lower word)
+                   (digit alnum xdigit ascii graph print word)
+                   (xdigit alpha alnum digit ascii graph print
+                           upper lower word)
+                   (cntrl ascii blank space)
+                   (ascii alpha alnum digit xdigit cntrl ascii blank
+                          graph print punct upper lower space word)
+                   (nonascii alpha alnum blank graph print punct
+                             upper lower space word)
+                   (blank cntrl ascii nonascii print punct space)
+                   (graph alpha alnum digit xdigit ascii nonascii print punct
+                          upper lower word)
+                   (print alpha alnum digit xdigit ascii nonascii blank graph
+                          punct upper lower space word)
+                   (punct ascii nonascii blank graph print upper lower word)
+                   (upper alpha alnum xdigit ascii nonascii graph print word)
+                   (lower alpha alnum xdigit ascii nonascii graph print word)
+                   (space cntrl ascii nonascii blank print)
+                   (word alpha alnum digit xdigit ascii nonascii graph print
+                         punct upper lower)))))))
+
+     ((characterp b)
+      (cond
+       ;; Some reasonably conservative subsets of `space' and `word'.
+       ((eq a 'space)
+        (not (string-match-p (rx (any (33 . 126))) (char-to-string b))))
+       ((eq a 'word)
+        (not (memq b '(?\s ?\t ?\f ?\r))))
+       (t
+        ;; Only some classes are invariant. `punct' is invariant for ASCII.
+        ;; `upper' and `lower' are not really invariant but mostly.
+        (or (and (eq a 'punct) (> b 127))
+            ;; This may be a tad slow.
+            (string-match-p (format "[[:%s:]]" a) (char-to-string b))))))
+
+     (t   ; b is a range.
+      ;; For simplicity, only check ASCII ranges.
+      (cond
+       ((and (> (cdr b) 127)
+             (not (memq a '(cntrl ascii digit xdigit)))))
+       ((eq a 'space)
+        (not (cl-some (lambda (a-range) (and (<= (car a-range) (cdr b))
+                                             (<= (car b) (cdr a-range))))
+                      '((?0 . ?9) (?A . ?Z) (?a . ?z)))))
+       ((eq a 'word))
+       (t
+        (cl-some
+         (lambda (a-range) (and (<= (car a-range) (cdr b))
+                                (<= (car b) (cdr a-range))))
+         (cdr (assq a '((alpha (?A . ?Z) (?a . ?z))
+                        (alnum (?0 . ?9) (?A . ?Z) (?a . ?z))
+                        (digit (?0 . ?9))
+                        (xdigit (?0 . ?9) (?A . ?F) (?a . ?f))
+                        (cntrl (0 . 31))
+                        (ascii (0 . 127))
+                        (graph (33 . 126))
+                        (print (32 . 126))
+                        (punct (33 . 47) (58 . 64) (91 . 96) (123 . 126))
+                        ;; Not-so-wild assumptions.
+                        (upper (?A . ?Z))
+                        (lower (?a . ?z)))))))))))
+
    ((consp a)
-    (or (and (characterp b)
-             (<= (car a) b (cdr a)))
-        (and (consp b)
-             (<= (car a) (cdr b))
-             (<= (car b) (cdr a)))
-        (symbolp b)))
+    (cond ((characterp b) (<= (car a) b (cdr a)))
+          ((consp b) (and (<= (car a) (cdr b))
+                          (<= (car b) (cdr a))))
+          (t  ; b is a class
+           (xr--any-item-may-intersect-p b a))))
    ;; Now a must be a character.
    ((characterp b) (eq a b))
    (t (xr--any-item-may-intersect-p b a))))
@@ -798,7 +959,13 @@ A-SETS and B-SETS are arguments to `any'."
     ((or 'ascii 'alnum 'alpha 'blank 'cntrl 'digit 'graph
          'lower 'multibyte 'nonascii 'print 'punct 'space
          'unibyte 'upper 'word 'xdigit)
-     (xr--char-superset-of-char-set-p sets negated `(any ,rx)))
+     (xr--char-superset-of-char-set-p sets negated (list rx)))
+    (`(not ,(and sym
+                 (or 'ascii 'alnum 'alpha 'blank 'cntrl 'digit 'graph
+                     'lower 'multibyte 'nonascii 'print 'punct 'space
+                     'unibyte 'upper 'word 'xdigit)))
+     (and negated
+          (xr--char-superset-of-char-set-p (list sym) nil sets)))
     ((pred stringp)
      (and (= (length rx) 1)
           (xr--char-superset-of-char-set-p sets negated (list rx))))))
@@ -810,6 +977,18 @@ A-SETS and B-SETS are arguments to `any'."
     (`(category ,_) t)
     (`(syntax ,s) (not (eq s ?>)))      ; comment-end often matches newline
     (_ (xr--char-superset-of-rx-p '("\n") t rx))))
+
+(defun xr--single-char-p (rx)
+  "Whether RX only matches single characters."
+  (or (memq rx '(nonl anything
+                 ascii alnum alpha blank cntrl digit graph
+                 lower multibyte nonascii print punct space
+                 unibyte upper word xdigit))
+      (and (stringp rx) (= (length rx) 1))
+      (and (consp rx)
+           (or (memq (car rx) '(any category syntax))
+               (and (eq (car rx) 'not)
+                    (xr--single-char-p (cadr rx)))))))
 
 (defun xr--syntax-superset-of-rx-p (syntax negated rx)
   "Whether SYNTAX, possibly NEGATED, is a superset of RX."
@@ -878,7 +1057,19 @@ single-character strings."
         (xr--char-superset-of-rx-p sets nil b))
        (`(not (any . ,sets))
         (xr--char-superset-of-rx-p sets t b))
+       ((or 'ascii 'alnum 'alpha 'blank 'cntrl 'digit 'graph
+            'lower 'multibyte 'nonascii 'print 'punct 'space
+            'unibyte 'upper 'word 'xdigit)
+        (xr--char-superset-of-rx-p (list a) nil b))
+       (`(not ,(and sym
+                    (or 'ascii 'alnum 'alpha 'blank 'cntrl 'digit 'graph
+                        'lower 'multibyte 'nonascii 'print 'punct 'space
+                        'unibyte 'upper 'word 'xdigit)))
+        (xr--char-superset-of-rx-p (list sym) t b))
+
        ('nonl (xr--single-non-newline-char-p b))
+
+       ('anything (xr--single-char-p b))
 
        (`(seq . ,a-body)
         (pcase b
