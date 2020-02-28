@@ -646,7 +646,7 @@ UPPER may be nil, meaning infinity."
          ;; accept any not otherwise handled character after the backslash
          ;; since such sequences are found in the wild.
          ((looking-at (rx "\\" (group (or (any "\\*+?.^$[]")
-                                          (group anything)))))
+                                          (group (not (any "\\*+?.^$[]")))))))
           (forward-char 2)
           (push (match-string 1) sequence)
           (when (match-beginning 2)
