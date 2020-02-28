@@ -255,6 +255,12 @@
           (if negated
               (list 'not (car classes))
             (car classes)))
+         ;; [^\n]: nonl.
+         ((and negated
+               (equal chars '(?\n))
+               (null ranges)
+               (null classes))
+          'nonl)
          ;; Anything else: produce (any ...)
          (t
           ;; Put dash last of all single characters.

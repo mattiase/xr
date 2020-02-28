@@ -185,6 +185,8 @@
                  '(any "z-" digit)))
   (should (equal (xr "[A-[:digit:]]")
                  '(seq (any "A-[" ":dgit") "]")))
+  (should (equal (xr "[^\n]")
+                 'nonl))
   (should-error (xr "[[::]]"))
   (should-error (xr "[[:=:]]"))
   (should-error (xr "[[:letter:]]"))
