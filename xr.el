@@ -735,14 +735,15 @@ UPPER may be nil, meaning infinity."
 (defun xr--any-arg-to-items (arg)
   "Convert an `any' argument to a list of characters, ranges (as pairs),
 and classes (symbols)."
-  ;; We know (since we built it) that x is either a symbol or
-  ;; a string, and that the string does not mix ranges and chars.
+  ;; We know (since we built it) that x is either a symbol, string or char,
+  ;; and that the string does not mix ranges and chars.
   (cond ((symbolp arg)
          ;; unibyte and multibyte are aliases of ascii and nonascii in
          ;; practice; simplify.
          (list (cond ((eq arg 'unibyte) 'ascii)
                      ((eq arg 'multibyte) 'nonascii)
                      (t arg))))
+        ((characterp arg) (list arg))
         ((and (>= (length arg) 3)
               (eq (aref arg 1) ?-))
          (xr--range-string-to-items arg))
@@ -977,9 +978,8 @@ A-SETS and B-SETS are arguments to `any'."
                      'unibyte 'upper 'word 'xdigit)))
      (and negated
           (xr--char-superset-of-char-set-p (list sym) nil sets)))
-    ((pred stringp)
-     (and (= (length rx) 1)
-          (xr--char-superset-of-char-set-p sets negated (list rx))))))
+    ((pred characterp)
+     (xr--char-superset-of-char-set-p sets negated (list rx)))))
 
 (defun xr--single-non-newline-char-p (rx)
   "Whether RX only matches single characters none of which is newline."
@@ -995,7 +995,7 @@ A-SETS and B-SETS are arguments to `any'."
                  ascii alnum alpha blank cntrl digit graph
                  lower multibyte nonascii print punct space
                  unibyte upper word xdigit))
-      (and (stringp rx) (= (length rx) 1))
+      (characterp rx)
       (and (consp rx)
            (or (memq (car rx) '(any category syntax))
                (and (eq (car rx) 'not)
@@ -1020,24 +1020,21 @@ A-SETS and B-SETS are arguments to `any'."
     (and set
          (xr--char-superset-of-rx-p (cdr set) nil rx))))
 
-(defun xr--string-to-chars (str)
-  (mapcar #'char-to-string (string-to-list str)))
-
 (defun xr--expand-strings (rx)
-  "If RX is a string or a seq of strings, convert them to seqs of
-single-character strings."
+  "Expand strings to characters or seqs of characters.
+`seq' forms are expanded non-recursively."
   (cond ((consp rx)
          (if (eq (car rx) 'seq)
              (cons 'seq (mapcan (lambda (x)
-                                  (if (and (stringp x)
-                                           (> (length x) 1))
-                                      (xr--string-to-chars x)
+                                  (if (stringp x)
+                                      (string-to-list x)
                                     (list x)))
                                 (cdr rx)))
            rx))
-        ((and (stringp rx)
-              (> (length rx) 1))
-         (cons 'seq (xr--string-to-chars rx)))
+        ((stringp rx)
+         (if (= (length rx) 1)
+             (string-to-char rx)
+           (cons 'seq (string-to-list rx))))
         (t rx)))
 
 (defun xr--superset-seq-p (a b)
@@ -1125,8 +1122,8 @@ single-character strings."
 
        ((or `(category ,_) `(not (category ,_)))
         (or (equal a b)
-            (and (stringp b)
-                 (string-match-p (rx-to-string a) b))))
+            (and (characterp b)
+                 (string-match-p (rx-to-string a) (char-to-string b)))))
 
        (_ (equal a b))))))
 
