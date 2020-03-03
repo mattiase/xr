@@ -109,7 +109,7 @@
     (while (not (looking-at "]"))
       (cond
        ;; character class
-       ((looking-at (rx "[:" (group (*? anything)) ":]"))
+       ((looking-at (rx "[:" (group (* (not (any ":")))) ":]"))
         (let ((sym (intern (match-string 1))))
           (unless (memq sym
                         '(ascii alnum alpha blank cntrl digit graph
@@ -123,9 +123,9 @@
             (push sym classes))
           (goto-char (match-end 0))))
        ;; character range
-       ((looking-at (rx (group (not (any "]"))) "-" (group (not (any "]")))))
-        (let ((start (string-to-char (match-string 1)))
-              (end   (string-to-char (match-string 2))))
+       ((looking-at (rx (not (any "]")) "-" (not (any "]"))))
+        (let ((start (char-after))
+              (end   (char-after (+ (point) 2))))
           (cond
            ((<= start end)
             (push (vector start end (point)) intervals))
@@ -272,7 +272,7 @@
           (when (memq ?- chars)
             (setq chars (cons ?- (delq ?- chars))))
           (let* ((set (cons 'any
-                            (append
+                            (nconc
                              (and ranges
                                   (list (apply #'concat (nreverse ranges))))
                              (and chars
@@ -283,14 +283,14 @@
               set))))))))
 
 (defun xr--rev-join-seq (sequence)
-  "Reverse a sequence, flatten any (seq ...) inside, and concatenate
-adjacent strings."
+  "Reverse SEQUENCE, flatten any (seq ...) inside, and concatenate
+adjacent strings. SEQUENCE is used destructively."
   (let ((result nil))
     (while sequence
       (let ((elem (car sequence))
             (rest (cdr sequence)))
         (cond ((and (consp elem) (eq (car elem) 'seq))
-               (setq sequence (append (reverse (cdr elem)) rest)))
+               (setq sequence (nconc (nreverse (cdr elem)) rest)))
               ((and (stringp elem) (stringp (car result)))
                (setq result (cons (concat elem (car result)) (cdr result)))
                (setq sequence rest))
@@ -572,7 +572,7 @@ UPPER may be nil, meaning infinity."
          ;; character alternative
          ((looking-at (rx "[" (opt (group "^"))))
           (goto-char (match-end 0))
-          (let ((negated (match-string 1)))
+          (let ((negated (match-beginning 1)))
             (push (xr--parse-char-alt negated warnings) sequence)))
 
          ;; group
@@ -580,9 +580,9 @@ UPPER may be nil, meaning infinity."
                                      (opt (opt (group (any "1-9")
                                                       (zero-or-more digit)))
                                           (group ":")))))
-          (let ((question (match-string 1))
+          (let ((question (match-beginning 1))
                 (number (match-string 2))
-                (colon (match-string 3)))
+                (colon (match-beginning 3)))
             (when (and question (not colon))
               (error "Invalid \\(? syntax"))
             (goto-char (match-end 0))
@@ -1152,7 +1152,7 @@ A-SETS and B-SETS are arguments to `any'."
         (if (or (equal alternatives '(nonl "\n"))
                 (equal alternatives '("\n" nonl)))
             'anything
-          (cons 'or (reverse alternatives)))
+          (cons 'or (nreverse alternatives)))
       (car alternatives))))
 
 (defun xr--parse (re-string warnings)
