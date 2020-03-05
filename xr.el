@@ -3,7 +3,7 @@
 ;; Copyright (C) 2019-2020 Free Software Foundation, Inc.
 
 ;; Author: Mattias Engdegård <mattiase@acm.org>
-;; Version: 1.16
+;; Version: 1.17
 ;; Package-Requires: ((emacs "26.1"))
 ;; URL: https://github.com/mattiase/xr
 ;; Keywords: lisp, regexps
@@ -29,6 +29,8 @@
 
 ;;; News:
 
+;; Version 1.17:
+;; - Performance improvements
 ;; Version 1.16:
 ;; - Translate [^\n] into nonl
 ;; - Better character class subset/superset analysis
