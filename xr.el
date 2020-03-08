@@ -1151,8 +1151,7 @@ A-SETS and B-SETS are arguments to `any'."
         (push seq alternatives)))
     (if (cdr alternatives)
         ;; Simplify (or nonl "\n") to anything
-        (if (or (equal alternatives '(nonl "\n"))
-                (equal alternatives '("\n" nonl)))
+        (if (member alternatives '((nonl "\n") ("\n" nonl)))
             'anything
           (cons 'or (nreverse alternatives)))
       (car alternatives))))
