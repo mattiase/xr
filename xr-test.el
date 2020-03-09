@@ -504,7 +504,7 @@
                    '((5 . "Branch matches subset of a previous branch"))))
     (should (equal (xr-lint "\\S-\\|x")
                    '((5 . "Branch matches subset of a previous branch"))))
-    (should (equal (xr-lint "\\c.\\|a")
+    (should (equal (xr-lint "\\cl\\|å")
                    '((5 . "Branch matches subset of a previous branch"))))
     (should (equal (xr-lint "\\Ca\\|ü")
                    '((5 . "Branch matches subset of a previous branch"))))
