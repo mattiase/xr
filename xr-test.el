@@ -602,7 +602,7 @@
              '((13 . "First item in repetition subsumes last item (wrapped)"))))
     (should (equal
              (xr-lint "\\(?3:a*xa*\\)\\{7\\}")
-             '((14 . "First item in repetition subsumes last item (wrapped)"))))
+             '((14 . "Last item in repetition subsumes first item (wrapped)"))))
     ))
 
 (ert-deftest xr-skip-set ()
