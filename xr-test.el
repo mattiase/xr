@@ -592,6 +592,19 @@
                      (46 . "Repetition subsumed by preceding repetition"))))
     ))
 
+(ert-deftest xr-lint-wrapped-subsumption ()
+  (let ((text-quoting-style 'grave))
+    (should (equal
+             (xr-lint "\\(?:a*x[ab]+\\)*")
+             '((14 . "Last item in repetition subsumes first item (wrapped)"))))
+    (should (equal
+             (xr-lint "\\([ab]*xya?\\)+")
+             '((13 . "First item in repetition subsumes last item (wrapped)"))))
+    (should (equal
+             (xr-lint "\\(?3:a*xa*\\)\\{7\\}")
+             '((14 . "First item in repetition subsumes last item (wrapped)"))))
+    ))
+
 (ert-deftest xr-skip-set ()
   (should (equal (xr-skip-set "0-9a-fA-F+*")
                  '(any "0-9a-fA-F" "+*")))

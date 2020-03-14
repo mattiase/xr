@@ -439,6 +439,65 @@ UPPER may be nil, meaning infinity."
      (cl-every #'xr--matches-empty-p body))
     ("" t)))
 
+(defun xr--adjacent-subsumption (a b)
+  "Check if A subsumes B, or vice versa, or not, assuming they are adjacent.
+Return `a-subsumes-b', `b-subsumes-a' or nil."
+  ;; Check for subsuming repetitions in sequence: (Ra A) (Rb B)
+  ;; where Ra and Rb are repetition operators, and A and B are operands.
+  ;; We conclude that (Ra A) subsumes (Rb B), in the sense that the
+  ;; sequence is equivalent to just (Ra A), if:
+  ;;       A matches a superset of B
+  ;;   and Ra can match infinitely many times
+  ;;   and Rb can match zero times
+  ;;   and Rb is non-greedy if Ra is non-greedy.
+  ;; Example: [cd]+c?
+  (let ((a-expr (and (consp a)
+                     (memq (car a)
+                           '(zero-or-more one-or-more opt *? +? ??))
+                     (xr--make-seq (cdr a)))))
+    (when a-expr
+      (let ((b-expr (and (consp b)
+                         (memq (car b)
+                               '(zero-or-more one-or-more opt *? +? ??))
+                         (xr--make-seq (cdr b)))))
+        (when b-expr
+          (let ((a-op (car a))
+                (b-op (car b)))
+            ;; Test the same condition twice, but mirrored.
+            (cond
+             ((and (memq b-op '(zero-or-more opt *? ??))
+                   (memq a-op '(zero-or-more one-or-more *? +?))
+                   (not (and (memq a-op '(*? +?))
+                             (memq b-op '(zero-or-more opt))))
+                   (xr--superset-p a-expr b-expr))
+              'a-subsumes-b)
+             ((and (memq a-op '(zero-or-more opt *? ??))
+                   (memq b-op '(zero-or-more one-or-more *? +?))
+                   (not (and (memq b-op '(*? +?))
+                             (memq a-op '(zero-or-more opt))))
+                   (xr--superset-p b-expr a-expr))
+              'b-subsumes-a))))))))
+  
+(defun xr--check-wrap-around-repetition (operand pos warnings)
+  "Whether OPERAND has a wrap-around repetition subsumption case,
+like (* (* X) ... (* X))."
+  (when (and (consp operand)
+             (memq (car operand) '(seq group group-n)))
+    (let* ((operands
+            (if (eq (car operand) 'group-n)
+                (cddr operand)
+              (cdr operand))))
+      (when (cddr operands)
+        (let* ((first (car operands))
+               (last (car (last operands)))
+               (subsumption (xr--adjacent-subsumption first last)))
+          (when subsumption
+            (xr--report
+             warnings pos
+             (if (eq subsumption 'a-subsumes-b)
+                 "First item in repetition subsumes last item (wrapped)"
+               "Last item in repetition subsumes first item (wrapped)"))))))))
+
 (defun xr--parse-seq (warnings)
   (let ((sequence nil))                 ; reversed
     (while (not (looking-at (rx (or "\\|" "\\)" eos))))
@@ -502,7 +561,11 @@ UPPER may be nil, meaning infinity."
                          (not (equal operand "")))
                     (xr--report
                      warnings (match-beginning 0)
-                     "Repetition of expression matching an empty string"))))
+                     "Repetition of expression matching an empty string")))
+                  ;; (* (* X) ... (* X)) etc: wrap-around subsumption
+                  (when (member operator '("*" "+" "*?" "+?"))
+                    (xr--check-wrap-around-repetition
+                     operand (match-beginning 0) warnings)))
                 (goto-char (match-end 0))
                 (setq sequence (cons (xr--postfix operator operand)
                                      (cdr sequence))))
@@ -561,6 +624,12 @@ UPPER may be nil, meaning infinity."
                                 (if comma
                                     "Uncounted repetition"
                                   "Implicit zero repetition")))
+                  (when (and warnings
+                             (if comma
+                                 (or (not upper) (>= upper 2))
+                               (>= lower 2)))
+                    (xr--check-wrap-around-repetition
+                     operand (match-beginning 0) warnings))
                   (goto-char (match-end 0))
                   (setq sequence (cons (xr--repeat lower
                                                    (if comma upper lower)
