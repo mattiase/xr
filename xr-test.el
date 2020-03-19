@@ -509,6 +509,14 @@
     (should (equal (xr-lint "\\Ca\\|ü")
                    '((5 . "Branch matches subset of a previous branch"))))
     
+    (should (equal (xr-lint "\\w\\|[^z-a]")
+                   '((4 . "Branch matches superset of a previous branch"))))
+    (should (equal (xr-lint "\\W\\|[^z-a]")
+                   '((4 . "Branch matches superset of a previous branch"))))
+    (should (equal (xr-lint "\\w\\|a")
+                   '((4 . "Branch matches subset of a previous branch"))))
+    (should (equal (xr-lint "\\W\\|\f")
+                   '((4 . "Branch matches subset of a previous branch"))))
   ))
 
 (ert-deftest xr-lint-subsumed-repetition ()

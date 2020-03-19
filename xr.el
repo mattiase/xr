@@ -1033,7 +1033,8 @@ A-SETS and B-SETS are arguments to `any'."
   (or (memq rx '(nonl anything
                  ascii alnum alpha blank cntrl digit graph
                  lower multibyte nonascii print punct space
-                 unibyte upper word xdigit))
+                 unibyte upper word xdigit
+                 wordchar not-wordchar))
       (characterp rx)
       (and (consp rx)
            (or (memq (car rx) '(any category syntax))
@@ -1159,6 +1160,9 @@ A-SETS and B-SETS are arguments to `any'."
         (or (equal a b) (xr--syntax-superset-of-rx-p syn nil b)))
        (`(not (syntax ,syn))
         (or (equal a b) (xr--syntax-superset-of-rx-p syn t b)))
+
+       ('wordchar (or (equal a b) (xr--syntax-superset-of-rx-p 'word nil b)))
+       ('not-wordchar (or (equal a b) (xr--syntax-superset-of-rx-p 'word t b)))
 
        ((or `(category ,_) `(not (category ,_)))
         (or (equal a b)
