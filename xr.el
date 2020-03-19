@@ -1042,22 +1042,23 @@ A-SETS and B-SETS are arguments to `any'."
 
 (defun xr--syntax-superset-of-rx-p (syntax negated rx)
   "Whether SYNTAX, possibly NEGATED, is a superset of RX."
-  ;; Syntax tables vary, but we make a (quite conservative) guess.
-  (let* ((always-set
-           ;; Characters we think always will be in the syntax set.
-           '((whitespace " \t")
-             (word "A-Za-z0-9")
-             (open-parenthesis "([")
-             (close-parenthesis "])")))
-         (never-set
-           ;; Characters we think never will be in the syntax set.
-           '((whitespace "!-~")
-             (punctuation "A-Za-z0-9")
-             (open-parenthesis "\x00- A-Za-z0-9")
-             (close-parenthesis "\x00- A-Za-z0-9")))
-         (set (assq syntax (if negated never-set always-set))))
-    (and set
-         (xr--char-superset-of-rx-p (cdr set) nil rx))))
+  (cond
+   ((eq syntax 'whitespace) (xr--char-superset-of-rx-p '(space) negated rx))
+   ((eq syntax 'word)       (xr--char-superset-of-rx-p '(word) negated rx))
+   (t
+    ;; Syntax tables vary, but we make a fairly conservative guess.
+    (let* ((always-set
+            ;; Characters we think always will be in the syntax set.
+            '((open-parenthesis "([")
+              (close-parenthesis "])")))
+           (never-set
+            ;; Characters we think never will be in the syntax set.
+            '((punctuation "A-Za-z0-9")   ; NOT the same as [:punct:]!
+              (open-parenthesis "\000-\037A-Za-z0-9" " \177")
+              (close-parenthesis "\000-\037A-Za-z0-9" " \177")))
+           (set (assq syntax (if negated never-set always-set))))
+      (and set
+           (xr--char-superset-of-rx-p (cdr set) nil rx))))))
 
 (defun xr--expand-strings (rx)
   "Expand strings to characters or seqs of characters.
