@@ -439,6 +439,29 @@ UPPER may be nil, meaning infinity."
      (cl-every #'xr--matches-empty-p body))
     ("" t)))
 
+(defun xr--matches-nonempty-only-p (rx)
+  "Whether RX matches non-empty strings only."
+  (pcase rx
+    ((pred stringp) (> (length rx) 0))
+    (`(,(or 'seq 'one-or-more '+? 'group) . ,body)
+     (cl-some #'xr--matches-nonempty-only-p body))
+    (`(or . ,body)
+     (cl-every #'xr--matches-nonempty-only-p body))
+    (`(group-n ,_ . ,body)
+     (cl-some #'xr--matches-nonempty-only-p body))
+    (`(repeat ,from ,_ . ,body)
+     (and (> from 0)
+          (cl-some #'xr--matches-nonempty-only-p body)))
+    (`(,(or '= '>=) ,n . ,body)
+     (and (> n 0)
+          (cl-some #'xr--matches-nonempty-only-p body)))
+    (`(,(or 'any 'not 'intersection) . ,_) t)
+    ((or 'ascii 'alnum 'alpha 'blank 'cntrl 'digit 'graph
+         'lower 'multibyte 'nonascii 'print 'punct 'space
+         'unibyte 'upper 'word 'xdigit
+         'nonl 'anything)
+     t)))
+
 (defun xr--adjacent-subsumption (a b)
   "Check if A subsumes B, or vice versa, or not, assuming they are adjacent.
 Return `a-subsumes-b', `b-subsumes-a' or nil."
@@ -742,7 +765,8 @@ like (* (* X) ... (* X))."
 
          (t (error "Backslash at end of regexp")))
 
-        (when (and warnings (cdr sequence))
+        (when (and warnings (cdr sequence)
+                   (not (looking-at (rx (or (any "?*+") "\\{")))))
           (let* ((item (car sequence))
                  (prev-item (cadr sequence))
                  (subsumption (xr--adjacent-subsumption prev-item item)))
@@ -750,7 +774,27 @@ like (* (* X) ... (* X))."
               (xr--report warnings item-start
                           (if (eq subsumption 'a-subsumes-b)
                               "Repetition subsumed by preceding repetition"
-                            "Repetition subsumes preceding repetition")))))))
+                            "Repetition subsumes preceding repetition")))
+
+            ;; Check for anchors conflicting with previous/next character.
+            (cond
+             ((and (xr--may-end-in-eol-p prev-item)
+                   (not (xr--may-start-in-nl-p item)))
+              (xr--report warnings item-start
+                          "End-of-line anchor followed by non-newline"))
+             ((and (xr--may-start-in-bol-p item)
+                   (not (xr--may-end-in-nl-p prev-item)))
+              (xr--report warnings item-start
+                          "Non-newline followed by line-start anchor"))
+             ((and (xr--may-end-in-eos-p prev-item)
+                   (xr--matches-nonempty-only-p item))
+              (xr--report warnings item-start
+                          "End-of-text anchor followed by non-empty pattern"))
+             ;; FIXME: We don't complain about non-empty followed by
+             ;; bos because it may be the start of unmatchable.
+             ;; We should really do these checks in a later pass,
+             ;; and maintain location information.
+             )))))
 
     (let ((item-seq (xr--rev-join-seq sequence)))
       (cond ((null item-seq)
@@ -759,6 +803,76 @@ like (* (* X) ... (* X))."
              (car item-seq))
             (t 
              (cons 'seq item-seq))))))
+
+(defun xr--may-start-in-bol-p (item)
+  (pcase item
+    ('bol t)
+    (`(,(or 'seq 'opt 'zero-or-more 'one-or-more ?? '*? '+? 'group) ,first . ,_)
+     (xr--may-start-in-bol-p first))
+    (`(group-n ,_ ,first . ,_)
+     (xr--may-start-in-bol-p first))
+    (`(or . ,items) (cl-some #'xr--may-start-in-bol-p items))))
+
+(defun xr--may-end-in-eol-p (item)
+  (pcase item
+    ('eol t)
+    (`(,(or 'seq 'opt 'zero-or-more 'one-or-more ?? '*? '+? 'group 'group-n)
+       . ,items)
+     (xr--may-end-in-eol-p (car (last items))))
+    (`(or . ,items) (cl-some #'xr--may-end-in-eol-p items))))
+
+(defun xr--may-end-in-eos-p (item)
+  (pcase item
+    ('eos t)
+    (`(,(or 'seq 'opt 'zero-or-more 'one-or-more ?? '*? '+? 'group 'group-n)
+       . ,items)
+     (xr--may-end-in-eos-p (car (last items))))
+    (`(or . ,items) (cl-some #'xr--may-end-in-eos-p items))))
+
+(defun xr--may-start-in-nl-p (item)
+  (pcase item
+    ((pred stringp) (or (equal item "") (eq (aref item 0) ?\n)))
+    (`(,(or 'seq 'one-or-more '+? 'group) ,first . ,_)
+     (xr--may-start-in-nl-p first))
+    (`(or . ,items) (cl-some #'xr--may-start-in-nl-p items))
+    (`(group-n ,_ ,first . ,_)
+     (xr--may-start-in-nl-p first))
+    (`(,(or '= '>=) ,n ,first . ,_)
+     (or (= n 0) (xr--may-start-in-nl-p first)))
+    (`(repeat ,n ,_ ,first . ,_)
+     (or (= n 0) (xr--may-start-in-nl-p first)))
+    (`(not ,arg)
+     (xr--superset-p 'nonl arg))
+    (`(,(or 'any 'intersection) . ,_)
+     (xr--superset-p 'nonl (list 'not item)))
+    ((or 'alnum 'alpha 'blank 'digit 'graph
+         'lower 'multibyte 'nonascii 'print 'punct
+         'upper 'word 'xdigit
+         'nonl)
+     nil)
+    (_ t)))
+
+(defun xr--may-end-in-nl-p (item)
+  (pcase item
+    ((pred stringp) (or (equal item "")
+                        (eq (aref item (1- (length item))) ?\n)))
+    (`(,(or 'seq 'one-or-more '+? 'group 'group-n) . ,items)
+     (xr--may-end-in-nl-p (car (last items))))
+    (`(or . ,items) (cl-some #'xr--may-end-in-nl-p items))
+    (`(,(or '= '>=) ,n . ,items)
+     (or (= n 0) (xr--may-end-in-nl-p (car (last items)))))
+    (`(repeat ,n ,_ . ,items)
+     (or (= n 0) (xr--may-end-in-nl-p (car (last items)))))
+    (`(not ,arg)
+     (xr--superset-p 'nonl arg))
+    (`(,(or 'any 'intersection) . ,_)
+     (xr--superset-p 'nonl (list 'not item)))
+    ((or 'alnum 'alpha 'blank 'digit 'graph
+         'lower 'multibyte 'nonascii 'print 'punct
+         'upper 'word 'xdigit
+         'nonl)
+     nil)
+    (_ t)))
 
 (defun xr--range-string-to-items (str)
   "Convert a string of ranges to a list of pairs of their endpoints."

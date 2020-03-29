@@ -619,6 +619,18 @@
              '((14 . "Last item in repetition subsumes first item (wrapped)"))))
     ))
 
+(ert-deftest xr-lint-bad-anchor ()
+  (let ((text-quoting-style 'grave))
+    (should (equal (xr-lint "a\\(?:^b$\\)c")
+                   '((1 . "Non-newline followed by line-start anchor")
+                     (10 . "End-of-line anchor followed by non-newline"))))
+    (should (equal (xr-lint ".\\(?:^$\\).")
+                   '((1 . "Non-newline followed by line-start anchor")
+                     (9 . "End-of-line anchor followed by non-newline"))))
+    (should (equal (xr-lint "\\'b")
+                   '((2 . "End-of-text anchor followed by non-empty pattern"))))
+    ))
+
 (ert-deftest xr-skip-set ()
   (should (equal (xr-skip-set "0-9a-fA-F+*")
                  '(any "0-9a-fA-F" "+*")))
