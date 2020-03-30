@@ -777,24 +777,41 @@ like (* (* X) ... (* X))."
                             "Repetition subsumes preceding repetition")))
 
             ;; Check for anchors conflicting with previous/next character.
-            (cond
-             ((and (xr--may-end-in-eol-p prev-item)
-                   (not (xr--may-start-in-nl-p item)))
-              (xr--report warnings item-start
-                          "End-of-line anchor followed by non-newline"))
-             ((and (xr--may-start-in-bol-p item)
-                   (not (xr--may-end-in-nl-p prev-item)))
-              (xr--report warnings item-start
-                          "Non-newline followed by line-start anchor"))
-             ((and (xr--may-end-in-eos-p prev-item)
-                   (xr--matches-nonempty-only-p item))
-              (xr--report warnings item-start
-                          "End-of-text anchor followed by non-empty pattern"))
-             ;; FIXME: We don't complain about non-empty followed by
-             ;; bos because it may be the start of unmatchable.
-             ;; We should really do these checks in a later pass,
-             ;; and maintain location information.
-             )))))
+            ;; To avoid false positives, we require that at least one
+            ;; of the items is present in all paths.
+            (let ((prev-eol (xr--ends-with-sym 'eol prev-item)))
+              (when prev-eol
+                (let ((this-nonl (xr--starts-with-nonl item)))
+                  (when (and this-nonl
+                             (or (eq prev-eol 'always)
+                                 (eq this-nonl 'always)))
+                    (xr--report
+                     warnings item-start
+                     "End-of-line anchor followed by non-newline")))))
+            (let ((this-bol (xr--starts-with-sym 'bol item)))
+              (when this-bol
+                (let ((prev-nonl (xr--ends-with-nonl prev-item)))
+                  (when (and prev-nonl
+                             (or (eq prev-nonl 'always)
+                                 (eq this-bol 'always)))
+                    (xr--report
+                     warnings item-start
+                     "Non-newline followed by line-start anchor")))))
+            (let ((prev-eos (xr--ends-with-sym 'eos prev-item)))
+              (when prev-eos
+                (let ((this-nonempty (xr--matches-nonempty item)))
+                  (when (and this-nonempty
+                             (or (eq prev-eos 'always)
+                                 (eq this-nonempty 'always)))
+                    (xr--report
+                     warnings item-start
+                     "End-of-text anchor followed by non-empty pattern")))))
+
+            ;; FIXME: We don't complain about non-empty followed by
+            ;; bos because it may be the start of unmatchable.
+            ;; We should really do these checks in a later pass,
+            ;; and maintain location information.
+            ))))
 
     (let ((item-seq (xr--rev-join-seq sequence)))
       (cond ((null item-seq)
@@ -804,75 +821,129 @@ like (* (* X) ... (* X))."
             (t 
              (cons 'seq item-seq))))))
 
-(defun xr--may-start-in-bol-p (item)
-  (pcase item
-    ('bol t)
-    (`(,(or 'seq 'opt 'zero-or-more 'one-or-more ?? '*? '+? 'group) ,first . ,_)
-     (xr--may-start-in-bol-p first))
-    (`(group-n ,_ ,first . ,_)
-     (xr--may-start-in-bol-p first))
-    (`(or . ,items) (cl-some #'xr--may-start-in-bol-p items))))
+(defun xr--tristate-some (f list)
+  "Whether F is true for some element in LIST.
+Return `always' if F returns `always' for at least one element,
+nil if F returns nil for all elements,
+`sometimes' otherwise."
+  (let ((result (mapcar f list)))
+    (cond ((memq 'always result) 'always)
+          ((memq 'sometimes result) 'sometimes))))
 
-(defun xr--may-end-in-eol-p (item)
-  (pcase item
-    ('eol t)
-    (`(,(or 'seq 'opt 'zero-or-more 'one-or-more ?? '*? '+? 'group 'group-n)
-       . ,items)
-     (xr--may-end-in-eol-p (car (last items))))
-    (`(or . ,items) (cl-some #'xr--may-end-in-eol-p items))))
+(defun xr--tristate-all (f list)
+  "Whether F is true for all elements in LIST.
+Return `always' if F returns `always' for all elements,
+nil if F returns nil for all elements,
+`sometimes' otherwise."
+  (let ((results (mapcar f list)))
+    (cond ((memq nil results) (and (delq nil results) 'sometimes))
+          ((memq 'sometimes results) 'sometimes)
+          (t 'always))))
 
-(defun xr--may-end-in-eos-p (item)
-  (pcase item
-    ('eos t)
-    (`(,(or 'seq 'opt 'zero-or-more 'one-or-more ?? '*? '+? 'group 'group-n)
-       . ,items)
-     (xr--may-end-in-eos-p (car (last items))))
-    (`(or . ,items) (cl-some #'xr--may-end-in-eos-p items))))
+(defun xr--matches-nonempty (rx)
+  "Whether RX matches non-empty strings. Return `always', `sometimes' or nil.
+`always' if RX only matches non-empty strings,
+`sometimes' if RX may match a non-empty string,
+nil if RX only matches the empty string."
+  (pcase rx
+    ((pred stringp) (and (> (length rx) 0) 'always))
+    (`(,(or 'seq 'one-or-more '+? 'group) . ,body)
+     (xr--tristate-some #'xr--matches-nonempty body))
+    (`(,(or 'opt 'zero-or-more ?? '*?) . ,body)
+     (and (xr--tristate-some #'xr--matches-nonempty body) 'sometimes))
+    (`(or . ,body)
+     (xr--tristate-all #'xr--matches-nonempty body))
+    (`(group-n ,_ . ,body)
+     (xr--tristate-some #'xr--matches-nonempty body))
+    (`(repeat ,from ,_ . ,body)
+     (if (= from 0)
+         (and (cl-some #'xr--matches-nonempty body) 'sometimes)
+       (xr--tristate-some #'xr--matches-nonempty body)))
+    (`(,(or '= '>=) ,n . ,body)
+     (if (= n 0)
+         (and (cl-some #'xr--matches-nonempty body) 'sometimes)
+       (xr--tristate-some #'xr--matches-nonempty body)))
+    (`(,(or 'any 'not 'intersection) . ,_) 'always)
+    ((or 'ascii 'alnum 'alpha 'blank 'cntrl 'digit 'graph
+         'lower 'multibyte 'nonascii 'print 'punct 'space
+         'unibyte 'upper 'word 'xdigit
+         'nonl 'anything)
+     'always)))
 
-(defun xr--may-start-in-nl-p (item)
+(defun xr--starts-with-sym (symbol item)
+  "Whether ITEM starts with SYMBOL. Return `always', `sometimes' or nil."
+  (cond ((eq item symbol) 'always)
+        ((atom item) nil)
+        ((memq (car item) '(seq one-or-more +? group))
+         (xr--starts-with-sym symbol (cadr item)))
+        ((memq (car item) '(seq opt zero-or-more ?? *?))
+         (and (xr--starts-with-sym symbol (cadr item)) 'sometimes))
+        ((eq (car item) 'group-n)
+         (xr--starts-with-sym symbol (caddr item)))
+        ((eq (car item) 'or)
+         (xr--tristate-all (lambda (x) (xr--starts-with-sym symbol x))
+                           (cdr item)))))
+
+(defun xr--ends-with-sym (symbol item)
+  "Whether ITEM ends with SYMBOL. Return `always', `sometimes' or nil."
+  (cond ((eq item symbol) 'always)
+        ((atom item) nil)
+        ((memq (car item) '(seq one-or-more +? group group-n))
+         (xr--ends-with-sym symbol (car (last item))))
+        ((memq (car item) '(seq opt zero-or-more ?? *?))
+         (and (xr--ends-with-sym symbol (car (last item))) 'sometimes))
+        ((eq (car item) 'or)
+         (xr--tristate-all (lambda (x) (xr--ends-with-sym symbol x))
+                           (cdr item)))))
+
+(defun xr--starts-with-nonl (item)
+  "Whether ITEM starts with a non-newline. Return `always', `maybe' or nil."
   (pcase item
-    ((pred stringp) (or (equal item "") (eq (aref item 0) ?\n)))
+    ((pred stringp)
+     (and (> (length item) 0) (not (eq (aref item 0) ?\n)) 'always))
     (`(,(or 'seq 'one-or-more '+? 'group) ,first . ,_)
-     (xr--may-start-in-nl-p first))
-    (`(or . ,items) (cl-some #'xr--may-start-in-nl-p items))
+     (xr--starts-with-nonl first))
+    (`(,(or 'opt 'zero-or-more ?? '*?) ,first . ,_)
+     (and (xr--starts-with-nonl first) 'sometimes))
+    (`(or . ,items)
+     (xr--tristate-all #'xr--starts-with-nonl items))
     (`(group-n ,_ ,first . ,_)
-     (xr--may-start-in-nl-p first))
+     (xr--starts-with-nonl first))
     (`(,(or '= '>=) ,n ,first . ,_)
-     (or (= n 0) (xr--may-start-in-nl-p first)))
+     (and (> n 0) (xr--starts-with-nonl first)))
     (`(repeat ,n ,_ ,first . ,_)
-     (or (= n 0) (xr--may-start-in-nl-p first)))
-    (`(not ,arg)
-     (xr--superset-p 'nonl arg))
-    (`(,(or 'any 'intersection) . ,_)
-     (xr--superset-p 'nonl (list 'not item)))
+     (and (> n 0) (xr--starts-with-nonl first)))
+    (`(,(or 'any 'not 'intersection) . ,_)
+     (and (xr--superset-p 'nonl item) 'always))
     ((or 'alnum 'alpha 'blank 'digit 'graph
          'lower 'multibyte 'nonascii 'print 'punct
          'upper 'word 'xdigit
          'nonl)
-     nil)
-    (_ t)))
+     'always)))
 
-(defun xr--may-end-in-nl-p (item)
+(defun xr--ends-with-nonl (item)
+  "Whether ITEM ends with a non-newline. Return `always', `maybe' or nil."
   (pcase item
-    ((pred stringp) (or (equal item "")
-                        (eq (aref item (1- (length item))) ?\n)))
+    ((pred stringp)
+     (and (> (length item) 0) (not (eq (aref item (1- (length item))) ?\n))
+          'always))
     (`(,(or 'seq 'one-or-more '+? 'group 'group-n) . ,items)
-     (xr--may-end-in-nl-p (car (last items))))
-    (`(or . ,items) (cl-some #'xr--may-end-in-nl-p items))
+     (xr--ends-with-nonl (car (last items))))
+    (`(,(or 'opt 'zero-or-more ?? '*?) . ,items)
+     (and (xr--ends-with-nonl (car (last items))) 'sometimes))
+    (`(or . ,items)
+     (xr--tristate-all #'xr--starts-with-nonl items))
     (`(,(or '= '>=) ,n . ,items)
-     (or (= n 0) (xr--may-end-in-nl-p (car (last items)))))
+     (and (> n 0) (xr--ends-with-nonl (car (last items)))))
     (`(repeat ,n ,_ . ,items)
-     (or (= n 0) (xr--may-end-in-nl-p (car (last items)))))
-    (`(not ,arg)
-     (xr--superset-p 'nonl arg))
-    (`(,(or 'any 'intersection) . ,_)
-     (xr--superset-p 'nonl (list 'not item)))
+     (and (> n 0) (xr--ends-with-nonl (car (last items)))))
+    (`(,(or 'any 'not 'intersection) . ,_)
+     (and (xr--superset-p 'nonl item) 'always))
     ((or 'alnum 'alpha 'blank 'digit 'graph
          'lower 'multibyte 'nonascii 'print 'punct
          'upper 'word 'xdigit
          'nonl)
-     nil)
-    (_ t)))
+     'always)))
 
 (defun xr--range-string-to-items (str)
   "Convert a string of ranges to a list of pairs of their endpoints."
