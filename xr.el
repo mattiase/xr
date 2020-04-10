@@ -521,7 +521,7 @@ like (* (* X) ... (* X))."
                  "First item in repetition subsumes last item (wrapped)"
                "Last item in repetition subsumes first item (wrapped)"))))))))
 
-(defun xr--parse-seq (warnings)
+(defun xr--parse-seq (warnings purpose)
   (let ((sequence nil))                 ; reversed
     (while (not (looking-at (rx (or "\\|" "\\)" eos))))
       (let ((item-start (point)))
@@ -530,8 +530,12 @@ like (* (* X) ... (* X))."
          ((looking-at (rx "^"))
           (forward-char 1)
           (if (null sequence)
-              (push 'bol sequence)
-            (xr--report warnings (match-beginning 0)
+              (progn
+                (when (eq purpose 'file)
+                  (xr--report warnings item-start
+                              "Use \\` instead of ^ in file-matching regexp"))
+                (push 'bol sequence))
+            (xr--report warnings item-start
                         (format-message "Unescaped literal `^'"))
             (push "^" sequence)))
 
@@ -539,8 +543,13 @@ like (* (* X) ... (* X))."
          ((looking-at (rx "$"))
           (forward-char 1)
           (if (looking-at (rx (or "\\|" "\\)" eos)))
-              (push 'eol sequence)
-            (xr--report warnings (match-beginning 0)
+              (progn
+                (when (eq purpose 'file)
+                  (xr--report warnings item-start
+                              "Use \\' instead of $ in file-matching regexp"))
+                
+                (push 'eol sequence))
+            (xr--report warnings item-start
                         (format-message "Unescaped literal `$'"))
             (push "$" sequence)))
 
@@ -682,7 +691,7 @@ like (* (* X) ... (* X))."
             (when (and question (not colon))
               (error "Invalid \\(? syntax"))
             (goto-char (match-end 0))
-            (let* ((group (xr--parse-alt warnings))
+            (let* ((group (xr--parse-alt warnings purpose))
                    ;; simplify - group has an implicit seq
                    (operand (if (and (listp group) (eq (car group) 'seq))
                                 (cdr group)
@@ -706,14 +715,23 @@ like (* (* X) ... (* X))."
           (push (list 'backref (string-to-number (match-string 1)))
                 sequence))
 
+         ;; not-newline
+         ((looking-at (rx "."))
+          (goto-char (match-end 0))
+          ;; Assume that .* etc is intended.
+          (when (and (eq purpose 'file)
+                     (not (looking-at (rx (any "?*+")))))
+            (xr--report warnings (match-beginning 0)
+                        "Possibly unescaped `.' in file-matching regexp"))
+          (push 'nonl sequence))
+
          ;; various simple substitutions
-         ((looking-at (rx (or "." "\\w" "\\W" "\\`" "\\'" "\\="
+         ((looking-at (rx (or "\\w" "\\W" "\\`" "\\'" "\\="
                               "\\b" "\\B" "\\<" "\\>")))
           (goto-char (match-end 0))
           (let ((sym (cdr (assoc
                            (match-string 0)
-                           '(("." . nonl)
-                             ("\\w" . wordchar) ("\\W" . not-wordchar)
+                           '(("\\w" . wordchar) ("\\W" . not-wordchar)
                              ("\\`" . bos) ("\\'" . eos)
                              ("\\=" . point)
                              ("\\b" . word-boundary) ("\\B" . not-word-boundary)
@@ -1356,13 +1374,13 @@ A-SETS and B-SETS are arguments to `any'."
 
        (_ (equal a b))))))
 
-(defun xr--parse-alt (warnings)
+(defun xr--parse-alt (warnings purpose)
   (let ((alternatives nil))             ; reversed
-    (push (xr--parse-seq warnings) alternatives)
+    (push (xr--parse-seq warnings purpose) alternatives)
     (while (not (looking-at (rx (or "\\)" eos))))
       (forward-char 2)                  ; skip \|
       (let ((pos (point))
-            (seq (xr--parse-seq warnings)))
+            (seq (xr--parse-seq warnings purpose)))
         (when warnings
           (cond
            ((member seq alternatives)
@@ -1383,13 +1401,13 @@ A-SETS and B-SETS are arguments to `any'."
           (cons 'or (nreverse alternatives)))
       (car alternatives))))
 
-(defun xr--parse (re-string warnings)
+(defun xr--parse (re-string warnings purpose)
   (with-temp-buffer
     (set-buffer-multibyte t)
     (insert re-string)
     (goto-char (point-min))
     (let* ((case-fold-search nil)
-           (rx (xr--parse-alt warnings)))
+           (rx (xr--parse-alt warnings purpose)))
       (when (looking-at (rx "\\)"))
         (error "Unbalanced \\)"))
       rx)))
@@ -1643,7 +1661,7 @@ and is one of:
 `brief'         -- short keywords
 `terse'         -- very short keywords
 `medium' or nil -- a compromise (the default)"
-  (xr--in-dialect (xr--parse re-string nil) dialect))
+  (xr--in-dialect (xr--parse re-string nil nil) dialect))
 
 ;;;###autoload
 (defun xr-skip-set (skip-set-string &optional dialect)
@@ -1657,14 +1675,16 @@ See `xr' for a description of the DIALECT argument."
   (xr--in-dialect (xr--parse-skip-set skip-set-string nil) dialect))
 
 ;;;###autoload
-(defun xr-lint (re-string)
+(defun xr-lint (re-string &optional purpose)
   "Detect dubious practices and possible mistakes in RE-STRING.
 This includes uses of tolerated but discouraged constructs.
 Outright regexp syntax violations are signalled as errors.
+If PURPOSE is `file', perform additional checks assuming that RE-STRING
+is used to match a file name.
 Return a list of (OFFSET . COMMENT) where COMMENT applies at OFFSET
 in RE-STRING."
   (let ((warnings (list nil)))
-    (xr--parse re-string warnings)
+    (xr--parse re-string warnings purpose)
     (sort (car warnings) #'car-less-than-car)))
 
 ;;;###autoload

@@ -651,6 +651,15 @@
                    nil))
     ))
 
+(ert-deftest xr-lint-file ()
+  (let ((text-quoting-style 'grave))
+    (should (equal (xr-lint "a.b\\.c.*d.?e.+f." 'file)
+                   '((1 . "Possibly unescaped `.' in file-matching regexp")
+                     (15 . "Possibly unescaped `.' in file-matching regexp"))))
+    (should (equal (xr-lint "^abc$" 'file)
+                   '((0 . "Use \\` instead of ^ in file-matching regexp")
+                     (4 . "Use \\' instead of $ in file-matching regexp"))))))
+
 (ert-deftest xr-skip-set ()
   (should (equal (xr-skip-set "0-9a-fA-F+*")
                  '(any "0-9a-fA-F" "+*")))
