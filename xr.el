@@ -3,7 +3,7 @@
 ;; Copyright (C) 2019-2020 Free Software Foundation, Inc.
 
 ;; Author: Mattias Engdegård <mattiase@acm.org>
-;; Version: 1.18
+;; Version: 1.19
 ;; Package-Requires: ((emacs "26.1"))
 ;; URL: https://github.com/mattiase/xr
 ;; Keywords: lisp, regexps
@@ -29,6 +29,11 @@
 
 ;;; News:
 
+;; Version 1.19:
+;; - Added filename-specific checks; new PURPOSE argument to `xr-lint'
+;; - Warn about wrapped subsumption, like \(A*C[AB]*\)+
+;; - Improved scope and accuracy of all subsumption checks
+;; - Warn about anchors in conflict with other expressions, like \(A$\)B
 ;; Version 1.18:
 ;; - Fix test broken in Emacs 26
 ;; Version 1.17:
