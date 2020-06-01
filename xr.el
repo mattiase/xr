@@ -747,7 +747,8 @@ like (* (* X) ... (* X))."
           (when (and (eq purpose 'file)
                      (not (looking-at (rx (any "?*+")))))
             (xr--report warnings (match-beginning 0)
-                        "Possibly unescaped `.' in file-matching regexp"))
+                        (format-message
+                         "Possibly unescaped `.' in file-matching regexp")))
           (push 'nonl sequence))
 
          ;; various simple substitutions
