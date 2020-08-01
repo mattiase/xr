@@ -444,29 +444,6 @@ UPPER may be nil, meaning infinity."
      (cl-every #'xr--matches-empty-p body))
     ("" t)))
 
-(defun xr--matches-nonempty-only-p (rx)
-  "Whether RX matches non-empty strings only."
-  (pcase rx
-    ((pred stringp) (> (length rx) 0))
-    (`(,(or 'seq 'one-or-more '+? 'group) . ,body)
-     (cl-some #'xr--matches-nonempty-only-p body))
-    (`(or . ,body)
-     (cl-every #'xr--matches-nonempty-only-p body))
-    (`(group-n ,_ . ,body)
-     (cl-some #'xr--matches-nonempty-only-p body))
-    (`(repeat ,from ,_ . ,body)
-     (and (> from 0)
-          (cl-some #'xr--matches-nonempty-only-p body)))
-    (`(,(or '= '>=) ,n . ,body)
-     (and (> n 0)
-          (cl-some #'xr--matches-nonempty-only-p body)))
-    (`(,(or 'any 'not 'intersection) . ,_) t)
-    ((or 'ascii 'alnum 'alpha 'blank 'cntrl 'digit 'graph
-         'lower 'multibyte 'nonascii 'print 'punct 'space
-         'unibyte 'upper 'word 'xdigit
-         'nonl 'anything)
-     t)))
-
 (defun xr--adjacent-subsumption (a b)
   "Check if A subsumes B, or vice versa, or not, assuming they are adjacent.
 Return `a-subsumes-b', `b-subsumes-a' or nil."
