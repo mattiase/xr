@@ -884,7 +884,7 @@ nil if RX only matches the empty string."
      (if (= n 0)
          (and (cl-some #'xr--matches-nonempty body) 'sometimes)
        (xr--tristate-some #'xr--matches-nonempty body)))
-    (`(,(or 'any 'not 'intersection) . ,_) 'always)
+    (`(,(or 'any 'not 'intersection 'syntax 'category) . ,_) 'always)
     ((or 'ascii 'alnum 'alpha 'blank 'cntrl 'digit 'graph
          'lower 'multibyte 'nonascii 'print 'punct 'space
          'unibyte 'upper 'word 'xdigit
