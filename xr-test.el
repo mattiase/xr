@@ -29,6 +29,7 @@
                  '(opt (or "ab" (seq (zero-or-more "c") "d")))))
   (should (equal (xr ".+")
                  '(one-or-more nonl)))
+  (should-error (xr "b\\"))
   )
 
 (ert-deftest xr-repeat ()
@@ -57,6 +58,7 @@
   (should (equal (xr "a\\{1,\\}")
                  '(>= 1 "a")))
   (should-error (xr "a\\{3,2\\}"))
+  (should-error (xr "a\\{1,2,3\\}"))
   )
 
 (ert-deftest xr-backref ()
@@ -69,6 +71,8 @@
   (should-error (xr "\\(?0:xy\\)"))
   (should (equal (xr "\\(?29:xy\\)")
                  '(group-n 29 "xy")))
+  (should-error (xr "\\(c?"))
+  (should-error (xr "xy\\)"))
   )
 
 (ert-deftest xr-misc ()
@@ -96,6 +100,8 @@
                        (not (syntax comment-start)))))
   (should-error (xr "\\s"))
   (should-error (xr "\\S"))
+  (should-error (xr "\\sq"))
+  (should-error (xr "\\Sq"))
   )
 
 (ert-deftest xr-category ()
@@ -190,6 +196,7 @@
   (should-error (xr "[[::]]"))
   (should-error (xr "[[:=:]]"))
   (should-error (xr "[[:letter:]]"))
+  (should-error (xr "[a-f"))
   )
 
 (ert-deftest xr-empty ()
@@ -310,7 +317,16 @@
                     "             (not (any space))))\n"
                     "     (* (? (not cntrl)\n"
                     "           blank\n"
-                    "           (| nonascii \"abcdef\"))))\n"))))
+                    "           (| nonascii \"abcdef\"))))\n")))
+    (with-temp-buffer
+      (should (equal (xr-pp ".?\\|b+") nil))
+      (should (equal (buffer-string)
+                     (concat
+                      "(or (opt nonl)\n"
+                      "    (one-or-more \"b\"))\n"))))
+    (with-temp-buffer
+      (should (equal (xr-skip-set-pp "^ac-nq\\-u") nil))
+      (should (equal (buffer-string) "(not (any \"c-n\" \"aqu-\"))\n"))))
   )
 
 (ert-deftest xr-dialect ()
@@ -339,6 +355,7 @@
                  '(seq bol bos bow nonl eow eos eol)))
   (should (equal (xr "^\\`\\<.\\>\\'$" 'terse)
                  '(: bol bos bow nonl eow eos eol)))
+  (should-error (xr "a" 'asdf))
   )
 
 (ert-deftest xr-lint ()
@@ -350,8 +367,9 @@
                      (3 . "Unescaped literal `$'"))))
     (should (equal (xr-lint "^**$")
                    '((1 . "Unescaped literal `*'"))))
-    (should (equal (xr-lint "a[\\\\[]")
-                   '((3 . "Duplicated `\\' inside character alternative"))))
+    (should (equal (xr-lint "a[\\\\[]b[d-g.d-g]c")
+                   '((3 . "Duplicated `\\' inside character alternative")
+                     (12 . "Duplicated `d-g' inside character alternative"))))
     (should (equal (xr-lint "\\{\\(+\\|?\\)\\[\\]\\}\\\t")
                    '((0  . "Escaped non-special character `{'")
                      (4  . "Unescaped literal `+'")
@@ -413,6 +431,10 @@
                    '((2 . "Repetition of zero-width assertion")
                      (5 . "Optional zero-width assertion")
                      (13 . "Repetition of zero-width assertion"))))
+    (should (equal
+             (xr-lint "\\`\\{2\\}\\(a\\|\\|b\\)\\{,8\\}")
+             '((2 . "Repetition of zero-width assertion")
+               (17 . "Repetition of expression matching an empty string"))))
     ))
 
 (ert-deftest xr-lint-repetition-of-empty ()
@@ -530,6 +552,18 @@
                    '((4 . "Branch matches subset of a previous branch"))))
     (should (equal (xr-lint "\\W\\|\f")
                    '((4 . "Branch matches subset of a previous branch"))))
+    (should (equal (xr-lint "[[:punct:]]\\|!")
+                   '((13 . "Branch matches subset of a previous branch"))))
+    (should (equal (xr-lint "[[:ascii:]]\\|[^α-ω]")
+                   '((13 . "Branch matches superset of a previous branch"))))
+    (should (equal (xr-lint "[^a-f]\\|[h-z]")
+                   '((8 . "Branch matches subset of a previous branch"))))
+    (should (equal (xr-lint "[0-9]\\|\\S(")
+                   '((7 . "Branch matches superset of a previous branch"))))
+    (should (equal (xr-lint "a+\\|[ab]+")
+                   '((4 . "Branch matches superset of a previous branch"))))
+    (should (equal (xr-lint "[ab]?\\|a?")
+                   '((7 . "Branch matches subset of a previous branch"))))
   ))
 
 (ert-deftest xr-lint-subsumed-repetition ()
@@ -644,6 +678,9 @@
                    '((10 . "End-of-line anchor followed by non-newline"))))
     (should (equal (xr-lint "\\(?:$\\|b\\)\\(\n\\|a\\)")
                    nil))
+    (should (equal (xr-lint "\\(?3:$\\)[ab]\\(?2:^\\)")
+                   '((8 . "End-of-line anchor followed by non-newline")
+                     (12 . "Non-newline followed by line-start anchor"))))
     (should (equal (xr-lint ".\\(?:^$\\).")
                    '((1 . "Non-newline followed by line-start anchor")
                      (9 . "End-of-line anchor followed by non-newline"))))
@@ -654,6 +691,8 @@
     (should (equal (xr-lint "\\(?:a\\|\\'\\)b")
                    '((11 .
                       "End-of-text anchor followed by non-empty pattern"))))
+    (should (equal (xr-lint "\\'\\(a\\|b?\\)")
+                   '((2 . "End-of-text anchor followed by non-empty pattern"))))
     (should (equal (xr-lint "\\(?:a\\|\\'\\)b?")
                    nil))
     ))
@@ -700,6 +739,8 @@
                  "\\."))
   (should (equal (xr-skip-set "^")
                  'anything))
+  (should (equal (xr-skip-set "[:alnum:]")
+                 'alnum))
   (should (equal (xr-skip-set "^[:print:]")
                  '(not print)))
   )
