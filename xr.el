@@ -111,11 +111,11 @@
                        (xr--escape-string (match-string 0) nil)))))
       (goto-char (match-end 0)))
      ;; Initial ]
-     ((looking-at "]")
+     ((eq (following-char) ?\])
       (push (vector ?\] ?\] (point)) intervals)
       (forward-char 1)))
 
-    (while (not (looking-at "]"))
+    (while (not (eq (following-char) ?\]))
       (cond
        ;; character class
        ((looking-at (rx "[:" (group (* (not (any ":")))) ":]"))
@@ -153,7 +153,7 @@
                          "Two-character range `%s'"
                          (xr--escape-string (match-string 0) nil))))
           (goto-char (match-end 0))))
-       ((looking-at (rx eos))
+       ((eobp)
         (error "Unterminated character alternative"))
        ;; plain character (including ^ or -)
        (t
@@ -509,7 +509,7 @@ like (* (* X) ... (* X))."
       (let ((item-start (point)))
         (cond
          ;; ^ - only special at beginning of sequence
-         ((looking-at (rx "^"))
+         ((eq (following-char) ?^)
           (forward-char 1)
           (if (null sequence)
               (progn
@@ -522,7 +522,7 @@ like (* (* X) ... (* X))."
             (push "^" sequence)))
 
          ;; $ - only special at end of sequence
-         ((looking-at (rx "$"))
+         ((eq (following-char) ?$)
           (forward-char 1)
           (if (looking-at (rx (or "\\|" "\\)" eos)))
               (progn
@@ -718,12 +718,12 @@ like (* (* X) ... (* X))."
                 sequence))
 
          ;; not-newline
-         ((looking-at (rx "."))
-          (goto-char (match-end 0))
+         ((eq (following-char) ?.)
+          (forward-char)
           ;; Assume that .* etc is intended.
           (when (and (eq purpose 'file)
                      (not (looking-at (rx (any "?*+")))))
-            (xr--report warnings (match-beginning 0)
+            (xr--report warnings (1- (point))
                         (format-message
                          "Possibly unescaped `.' in file-matching regexp")))
           (push 'nonl sequence))
@@ -1438,7 +1438,7 @@ A-SETS and B-SETS are arguments to `any'."
     (xr--report warnings (point)
                 (format-message "Suspect skip set framed in `[...]'")))
 
-  (let ((negated (looking-at (rx "^")))
+  (let ((negated (eq (following-char) ?^))
         (start-pos (point))
         (ranges nil)
         (classes nil))
