@@ -246,9 +246,9 @@
             (push (string (aref interv 0) ?- (aref interv 1))
                   ranges)))
         
-        ;; Note that we return (any) for non-negated empty sets,
-        ;; such as [z-a]. (any) is not accepted by rx but at least we
-        ;; are not hiding potential bugs from the user.
+        ;; We return (any) for non-negated empty sets, such as [z-a].
+        ;; `unmatchable' would perhaps be better; both require Emacs 27.1
+        ;; or newer for use in rx.
         (cond
          ;; Negated empty set, like [^z-a]: anything.
          ((and negated
