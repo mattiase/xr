@@ -192,47 +192,45 @@
       (while (cdr s)
         (let ((this (car s))
               (next (cadr s)))
-          (when (>= (aref this 1) (aref next 0))
-            (let ((message
-                   (cond
-                    ;; Duplicate character: drop it and warn.
-                    ((and (eq (aref this 0) (aref this 1))
-                          (eq (aref next 0) (aref next 1)))
-                     (setcdr s (cddr s))
-                     (format-message
-                      "Duplicated `%c' inside character alternative"
-                      (aref this 0)))
-                    ;; Duplicate range: drop it and warn.
-                    ((and (eq (aref this 0) (aref next 0))
-                          (eq (aref this 1) (aref next 1)))
-                     (setcdr s (cddr s))
-                     (format-message
-                      "Duplicated `%c-%c' inside character alternative"
-                      (aref this 0) (aref this 1)))
-                    ;; Character in range: drop it and warn.
-                    ((eq (aref this 0) (aref this 1))
-                     (setcar s next)
-                     (setcdr s (cddr s))
-                     (format-message
-                      "Character `%c' included in range `%c-%c'"
-                      (aref this 0) (aref next 0) (aref next 1)))
-                    ;; Same but other way around.
-                    ((eq (aref next 0) (aref next 1))
-                     (setcdr s (cddr s))
-                     (format-message
-                      "Character `%c' included in range `%c-%c'"
-                      (aref next 0) (aref this 0) (aref this 1)))
-                    ;; Overlapping ranges: merge and warn.
-                    (t
-                     (let ((this-end (aref this 1)))
-                       (aset this 1 (max (aref this 1) (aref next 1)))
-                       (setcdr s (cddr s))
-                       (format-message "Ranges `%c-%c' and `%c-%c' overlap"
-                                       (aref this 0) this-end
-                                       (aref next 0) (aref next 1)))))))
-              (xr--report warnings (max (aref this 2) (aref next 2))
-                          (xr--escape-string message nil)))))
-        (setq s (cdr s)))
+          (if (>= (aref this 1) (aref next 0))
+              ;; Overlap.
+              (let ((message
+                     (cond
+                      ;; Duplicate character: drop it and warn.
+                      ((and (eq (aref this 0) (aref this 1))
+                            (eq (aref next 0) (aref next 1)))
+                       (format-message
+                        "Duplicated `%c' inside character alternative"
+                        (aref this 0)))
+                      ;; Duplicate range: drop it and warn.
+                      ((and (eq (aref this 0) (aref next 0))
+                            (eq (aref this 1) (aref next 1)))
+                       (format-message
+                        "Duplicated `%c-%c' inside character alternative"
+                        (aref this 0) (aref this 1)))
+                      ;; Character in range: drop it and warn.
+                      ((eq (aref this 0) (aref this 1))
+                       (setcar s next)
+                       (format-message
+                        "Character `%c' included in range `%c-%c'"
+                        (aref this 0) (aref next 0) (aref next 1)))
+                      ;; Same but other way around.
+                      ((eq (aref next 0) (aref next 1))
+                       (format-message
+                        "Character `%c' included in range `%c-%c'"
+                        (aref next 0) (aref this 0) (aref this 1)))
+                      ;; Overlapping ranges: merge and warn.
+                      (t
+                       (let ((this-end (aref this 1)))
+                         (aset this 1 (max (aref this 1) (aref next 1)))
+                         (format-message "Ranges `%c-%c' and `%c-%c' overlap"
+                                         (aref this 0) this-end
+                                         (aref next 0) (aref next 1)))))))
+                (xr--report warnings (max (aref this 2) (aref next 2))
+                            (xr--escape-string message nil))
+                (setcdr s (cddr s)))
+            ;; No overlap.
+            (setq s (cdr s)))))
             
       ;; Gather ranges and single characters separately.
       ;; We make no attempts at merging adjacent intervals/characters,

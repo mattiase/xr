@@ -197,6 +197,10 @@
   (should-error (xr "[[:=:]]"))
   (should-error (xr "[[:letter:]]"))
   (should-error (xr "[a-f"))
+  (should (equal (xr "[aaaaaa][bananabanana][aaaa-cccc][a-ca-ca-c]")
+                 '(seq "a" (any "abn") (any "a-c") (any "a-c"))))
+  (should (equal (xr "[a-fb-gc-h][a-fc-kh-p]")
+                 '(seq (any "a-h") (any "a-p"))))
   )
 
 (ert-deftest xr-empty ()
