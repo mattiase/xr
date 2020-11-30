@@ -3,7 +3,7 @@
 ;; Copyright (C) 2019-2020 Free Software Foundation, Inc.
 
 ;; Author: Mattias Engdegård <mattiase@acm.org>
-;; Version: 1.19
+;; Version: 1.20
 ;; Package-Requires: ((emacs "26.1"))
 ;; URL: https://github.com/mattiase/xr
 ;; Keywords: lisp, regexps
@@ -29,6 +29,10 @@
 
 ;;; News:
 
+;; Version 1.20:
+;; - Fix duplication removal in character alternatives, like [aaa]
+;; - All diagnostics are now described in the README file
+;; - Improved anchor conflict checks
 ;; Version 1.19:
 ;; - Added filename-specific checks; new PURPOSE argument to `xr-lint'
 ;; - Warn about wrapped subsumption, like \(A*C[AB]*\)+
