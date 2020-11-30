@@ -1705,6 +1705,8 @@ in SKIP-SET-STRING."
   "Escape non-printing characters in a string for maximum readability.
 If ESCAPE-PRINTABLE, also escape \\ and \", otherwise don't."
   (replace-regexp-in-string
+   ;; We don't use rx here because of bugs in dealing with raw chars
+   ;; prior to Emacs 27.1.
    "[\x00-\x1f\"\\\x7f\x80-\xff][[:xdigit:]]?"
    (lambda (s)
      (let* ((c (logand (string-to-char s) #xff))
