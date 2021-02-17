@@ -546,53 +546,49 @@ like (* (* X) ... (* X))."
               (let ((operator (match-string 0))
                     (operand (car sequence)))
                 (when warnings
-                  (cond
-                   ((and (consp operand)
-                         (or
-                          ;; (* (* X)), for any repetitions *
-                          (memq (car operand)
-                                '(opt zero-or-more one-or-more +? *? ??))
-                          ;; (* (group (* X))), for any repetitions *
-                          (and
-                           (eq (car operand) 'group)
-                           (null (cddr operand))
-                           (let ((inner (cadr operand)))
-                             (and (consp inner)
-                                  (memq (car inner)
-                                        '(opt zero-or-more one-or-more
-                                          +? *? ??))
-                                  ;; Except (? (group (+ X))), since that may
-                                  ;; be legitimate.
-                                  (not (and (equal operator "?")
-                                            (memq (car inner)
-                                                  '(one-or-more +?)))))))))
-                    (let ((outer-opt (member operator '("?" "??")))
-                          (inner-opt (or (memq (car operand) '(opt ??))
-                                         (and (eq (car operand) 'group)
-                                              (memq (caadr operand)
-                                                    '(opt ??))))))
-                      (xr--report warnings (match-beginning 0)
-                                  (if outer-opt
+                  ;; Check both (OP (OP X)) and (OP (group (OP X))).
+                  (let ((inner-op
+                         (and (consp operand)
+                              (if (eq (car operand) 'group)
+                                  (and (null (cddr operand))
+                                       (let ((inner (cadr operand)))
+                                         (and (consp inner)
+                                              (car inner))))
+                                (car operand)))))
+                    (cond
+                     ((and
+                       ;; (OP1 (OP2 X)), for any repetitions OP1, OP2
+                       (memq inner-op '(opt zero-or-more one-or-more *? +? ??))
+                       ;; Except (? (+ X)) which may be legitimate.
+                       (not (and (equal operator "?")
+                                 (consp operand)
+                                 (memq inner-op '(one-or-more +?)))))
+                      (let ((outer-opt (member operator '("?" "??")))
+                            (inner-opt (memq inner-op '(opt ??))))
+                        (xr--report warnings (match-beginning 0)
+                                    (if outer-opt
+                                        (if inner-opt
+                                            "Optional option"
+                                          "Optional repetition")
                                       (if inner-opt
-                                          "Optional option"
-                                        "Optional repetition")
-                                    (if inner-opt
-                                        "Repetition of option"
-                                      "Repetition of repetition")))))
-                   ((memq operand xr--zero-width-assertions)
-                    (xr--report warnings (match-beginning 0)
-                                (if (member operator '("?" "??"))
-                                    "Optional zero-width assertion"
-                                  "Repetition of zero-width assertion")))
-                   ((and (xr--matches-empty-p operand)
-                         ;; Rejecting repetition of the empty string
-                         ;; suppresses some false positives.
-                         (not (equal operand "")))
-                    (xr--report
-                     warnings (match-beginning 0)
-                     (if (member operator '("?" "??"))
-                         "Optional expression matching an empty string"
-                       "Repetition of expression matching an empty string"))))
+                                          "Repetition of option"
+                                        "Repetition of repetition")))))
+                     ((memq operand xr--zero-width-assertions)
+                      (xr--report warnings (match-beginning 0)
+                                  (if (member operator '("?" "??"))
+                                      "Optional zero-width assertion"
+                                    "Repetition of zero-width assertion")))
+                     ((and (xr--matches-empty-p operand)
+                           ;; Rejecting repetition of the empty string
+                           ;; suppresses some false positives.
+                           (not (equal operand "")))
+                      (xr--report
+                       warnings (match-beginning 0)
+                       (concat
+                        (if (member operator '("?" "??"))
+                            "Optional expression"
+                          "Repetition of expression")
+                        " matching an empty string")))))
                   ;; (* (* X) ... (* X)) etc: wrap-around subsumption
                   (when (member operator '("*" "+" "*?" "+?"))
                     (xr--check-wrap-around-repetition

@@ -388,6 +388,8 @@
                    '((2  . "Repetition of option")
                      (14 . "Repetition of repetition")
                      (25 . "Repetition of repetition"))))
+    (should (equal (xr-lint "\\(?:a+\\)?")
+                   nil))
     (should (equal (xr-lint "\\(a*\\)*\\(b+\\)*\\(c*\\)?\\(d+\\)?")
                    '((6 .  "Repetition of repetition")
                      (13 . "Repetition of repetition")
