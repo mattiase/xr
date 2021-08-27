@@ -26,5 +26,8 @@ jobs:
       - name: Check out xr
         uses: actions/checkout@v2
 
+      - name: Byte-compile
+        run: make build
+
       - name: Test
-        run: make build check
+        run: make check
