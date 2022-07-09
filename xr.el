@@ -129,6 +129,11 @@
         (let ((start ch)
               (end (char-after (+ (point) 2))))
           (cond
+           ((<= start #x7f #x3fff80 end)
+            ;; Intervals that go from ASCII (0-7f) to raw bytes
+            ;; (3fff80-3fffff) always exclude the intervening (Unicode) points.
+            (push (vector start #x7f (point)) intervals)
+            (push (vector #x3fff80 end (point)) intervals))
            ((<= start end)
             (push (vector start end (point)) intervals))
            ;; It's unlikely that anyone writes z-a by mistake; don't complain.
@@ -1458,7 +1463,7 @@ A-SETS and B-SETS are arguments to `any'."
 
   (let ((negated (eq (following-char) ?^))
         (start-pos (point))
-        (ranges nil)
+        (intervals nil)
         (classes nil))
     (when negated
       (forward-char)
@@ -1531,39 +1536,16 @@ A-SETS and B-SETS are arguments to `any'."
                            (format-message "Two-element range `%c-%c'"
                                            start end)
                            nil))))
-            (let ((tail ranges))
-              (while tail
-                (let ((range (car tail)))
-                  (if (and (<= (car range) (or end start))
-                           (<= start (cdr range)))
-                      (let ((msg
-                             (cond
-                              ((and end (< start end)
-                                    (< (car range) (cdr range)))
-                               (format-message
-                                "Ranges `%c-%c' and `%c-%c' overlap"
-                                (car range) (cdr range) start end))
-                              ((and end (< start end))
-                               (format-message
-                                "Range `%c-%c' includes character `%c'"
-                                start end (car range)))
-                              ((< (car range) (cdr range))
-                               (format-message
-                                "Character `%c' included in range `%c-%c'"
-                                start (car range) (cdr range)))
-                              (t
-                               (format-message "Duplicated character `%c'"
-                                               start)))))
-                        (xr--report warnings (point)
-                                    (xr--escape-string msg nil))
-                        ;; Expand previous interval to include this range.
-                        (setcar range (min (car range) start))
-                        (setcdr range (max (cdr range) (or end start)))
-                        (setq start nil)
-                        (setq tail nil))
-                    (setq tail (cdr tail))))))
-            (when start
-              (push (cons start (or end start)) ranges)))))
+          (cond
+           ((not end)
+            (push (vector start start (point)) intervals))
+           ((<= start #x7f #x3fff80 end)
+            ;; Intervals that go from ASCII (0-7f) to raw bytes
+            ;; (3fff80-3fffff) always exclude the intervening (Unicode) points.
+            (push (vector start #x7f (point)) intervals)
+            (push (vector #x3fff80 end (point)) intervals))
+           (t
+            (push (vector start end (point)) intervals))))))
 
        ((looking-at (rx "\\" eos))
         (xr--report warnings (point)
@@ -1571,51 +1553,99 @@ A-SETS and B-SETS are arguments to `any'."
 
       (goto-char (match-end 0)))
 
-    (when (and (null ranges) (null classes))
+    (when (and (null intervals) (null classes))
       (xr--report warnings (point-min)
                   (if negated
                       "Negated empty set matches anything"
                     "Empty set matches nothing")))
 
-    (cond
-     ;; Single non-negated character, like "-": make a string.
-     ((and (not negated)
-           (null classes)
-           (= (length ranges) 1)
-           (eq (caar ranges) (cdar ranges)))
-      (regexp-quote (char-to-string (caar ranges))))
-     ;; Negated empty set, like "^": anything.
-     ((and negated
-           (null classes)
-           (null ranges))
-      'anything)
-     ;; Single named class, like "[:nonascii:]": use the symbol.
-     ((and (= (length classes) 1)
-           (null ranges))
-      (if negated
-          (list 'not (car classes))
-        (car classes)))
-     ;; Anything else: produce (any ...)
-     (t
-      (let ((intervals nil)
+    (let* ((sorted (sort (nreverse intervals)
+                         (lambda (a b) (< (aref a 0) (aref b 0)))))
+           (s sorted))
+      (while (cdr s)
+        (let ((this (car s))
+              (next (cadr s)))
+          (if (>= (aref this 1) (aref next 0))
+              ;; Overlap.
+              (let ((message
+                     (cond
+                      ;; Duplicate character: drop it and warn.
+                      ((and (eq (aref this 0) (aref this 1))
+                            (eq (aref next 0) (aref next 1)))
+                       (format-message
+                        "Duplicated character `%c'"
+                        (aref this 0)))
+                      ;; Duplicate range: drop it and warn.
+                      ((and (eq (aref this 0) (aref next 0))
+                            (eq (aref this 1) (aref next 1)))
+                       (format-message
+                        "Duplicated range `%c-%c'"
+                        (aref this 0) (aref this 1)))
+                      ;; Character in range: drop it and warn.
+                      ((eq (aref this 0) (aref this 1))
+                       (setcar s next)
+                       (format-message
+                        "Character `%c' included in range `%c-%c'"
+                        (aref this 0) (aref next 0) (aref next 1)))
+                      ;; Same but other way around.
+                      ((eq (aref next 0) (aref next 1))
+                       (format-message
+                        "Character `%c' included in range `%c-%c'"
+                        (aref next 0) (aref this 0) (aref this 1)))
+                      ;; Overlapping ranges: merge and warn.
+                      (t
+                       (let ((this-end (aref this 1)))
+                         (aset this 1 (max (aref this 1) (aref next 1)))
+                         (format-message "Ranges `%c-%c' and `%c-%c' overlap"
+                                         (aref this 0) this-end
+                                         (aref next 0) (aref next 1)))))))
+                (xr--report warnings (max (aref this 2) (aref next 2))
+                            (xr--escape-string message nil))
+                (setcdr s (cddr s)))
+            ;; No overlap.
+            (setq s (cdr s)))))
+
+      (let ((ranges nil)
             (chars nil))
-        (dolist (range ranges)
-          (if (eq (car range) (cdr range))
-              (push (car range) chars)
-            (push (string (car range) ?- (cdr range)) intervals)))
-        ;; Put a single `-' last.
-        (when (memq ?- chars)
-          (setq chars (append (delq ?- chars) (list ?-))))
-        (let ((set (cons 'any
-                         (append
-                          (and intervals
-                               (list (apply #'concat intervals)))
-                          (and chars
-                               (list (apply #'string chars)))
-                          (nreverse classes)))))
+        (dolist (interv sorted)
+          (if (eq (aref interv 0) (aref interv 1))
+              (push (aref interv 0) chars)
+            (push (string (aref interv 0) ?- (aref interv 1))
+                  ranges)))
+
+        (cond
+         ;; Single non-negated character, like "-": make a string.
+         ((and (not negated)
+               (null classes)
+               (null ranges)
+               (= (length chars) 1))
+          (regexp-quote (char-to-string (car chars))))
+         ;; Negated empty set, like "^": anything.
+         ((and negated
+               (null classes)
+               (null intervals))
+          'anything)
+         ;; Single named class, like "[:nonascii:]": use the symbol.
+         ((and (= (length classes) 1)
+               (null intervals))
           (if negated
-              (list 'not set)
-            set)))))))
+              (list 'not (car classes))
+            (car classes)))
+         ;; Anything else: produce (any ...)
+         (t
+          ;; Put a single `-' last.
+          (when (memq ?- chars)
+            (setq chars (cons ?- (delq ?- chars))))
+          (let ((set (cons 'any
+                           (append
+                            (and ranges
+                                 (list (apply #'concat (nreverse ranges))))
+                            (and chars
+                                 (list (apply #'string (nreverse chars))))
+                            (nreverse classes)))))
+            (if negated
+                (list 'not set)
+              set))))))))
 
 (defun xr--parse-skip-set (skip-string warnings)
   (with-temp-buffer
