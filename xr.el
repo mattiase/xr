@@ -3,7 +3,7 @@
 ;; Copyright (C) 2019-2020 Free Software Foundation, Inc.
 
 ;; Author: Mattias Engdegård <mattiase@acm.org>
-;; Version: 1.22
+;; Version: 1.23
 ;; Package-Requires: ((emacs "26.1"))
 ;; URL: https://github.com/mattiase/xr
 ;; Keywords: lisp, regexps
@@ -29,6 +29,11 @@
 
 ;;; News:
 
+;; Version 1.23:
+;; - Represent explicitly the gap in ranges from ASCII to raw bytes:
+;;   "[A-\xbb]" becomes (any "A-\x7f\x80-\xbb") because that is how
+;;   Emacs regexps work. This also suppresses some false positives
+;;   in `xr-lint' and `xr-skip-set-lint'.
 ;; Version 1.22:
 ;; - More compact distribution
 ;; Version 1.21:
