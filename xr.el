@@ -1786,9 +1786,12 @@ If ESCAPE-PRINTABLE, also escape \\ and \", otherwise don't."
         xdigit)))
    string 'fixedcase 'literal))
 
-(defun xr--take (n list)
-  "The N first elements of LIST."
-  (butlast list (- (length list) n)))
+(defalias 'xr--take
+  (if (fboundp 'take)
+      #'take
+    (lambda (n list)
+      "The N first elements of LIST."
+      (cl-loop repeat n for x in list collect x))))
 
 (defun xr--rx-list-to-string (rx plain-prefix)
   "Print the list `rx' to a string, unformatted.
