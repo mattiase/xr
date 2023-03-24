@@ -161,6 +161,22 @@ The xr package can be used interactively or by other code as a library.
     A pattern that only matches a non-empty string occurs right after
     an end-of-text anchor (\'). This combination can never match.
 
+  - Use \` instead of ^ in file-matching regexp
+  - Use \' instead of $ in file-matching regexp
+
+    In a regexp used for matching a file name, newlines are usually
+    not relevant. Line-start and line-end anchors should therefore
+    probably be replaced with string-start and string-end,
+    respectively. Otherwise, the regexp may fail for file names that
+    do contain newlines.
+
+  - Possibly unescaped '.' in file-matching regexp
+
+    In a regexp used for matching a file name, a naked dot is usually
+    more likely to be a mistake (missing escaping backslash) than an
+    actual intent to match any character except newline, since literal
+    dots are very common in file name patterns.
+
   - Uncounted repetition
 
     The construct A\{,\} repeats A zero or more times which was
