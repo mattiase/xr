@@ -652,6 +652,12 @@ like (* (* X) ... (* X))."
                             (goto-char (match-end 0))
                             (string-to-number (match-string 1)))
                            (t (error "Invalid \\(? syntax"))))
+                      (when (and (eq (following-char) ?:)
+                                 (eq (char-after (1+ (point))) ??))
+                        ;; Mistyped shy group construct `?:'.
+                        (xr--report warnings (point)
+                                    (format-message
+                                     "Suspect `:?' at start of grouping")))
                       'unnumbered))
                    (group (xr--parse-alt warnings purpose))
                    ;; simplify - group has an implicit seq

@@ -222,6 +222,12 @@ The xr package can be used interactively or by other code as a library.
     In general, A?, where A matches the empty string, can be
     simplified to just A.
 
+  - Suspect ':?' at start of grouping
+
+    The subexpression enclosed by a grouping construct starts with
+    :? (optional colon) instead of the more commonly intended
+    ?: (shy group).
+
   - Unnecessarily escaped 'X'
 
     A character is backslash-escaped in a skip set despite not being
