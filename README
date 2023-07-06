@@ -247,6 +247,12 @@ The xr package can be used interactively or by other code as a library.
     In general, A?, where A matches the empty string, can be
     simplified to just A.
 
+  - Possibly mistyped ':?' at start of group
+
+    A group starts as \(:? which makes it likely that it was really
+    meant to be \(?: -- ie, a non-capturing group.
+    This check is only enable when CHECKS=all.
+
   - Unnecessarily escaped 'X'
 
     A character is backslash-escaped in a skip set despite not being

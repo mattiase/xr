@@ -488,7 +488,6 @@
               '((4 . "Suspect character range `+-/': should `-' be literal?")
                 (10 . "Suspect character range `&-+': should `-' be literal?"))
             nil)))
-
         (should
          (equal
           (xr-lint "[ \\t][-.\\d][\\Sw][\\rnt]" nil checks)
@@ -496,6 +495,10 @@
               '((2 . "Possibly erroneous `\\t' in character alternative")
                 (8 . "Possibly erroneous `\\d' in character alternative")
                 (12 . "Possibly erroneous `\\S' in character alternative")))))
+        (should (equal (xr-lint "\\(?:ta\\)\\(:?da\\)\\(:?\\)" nil checks)
+                       (if (eq checks 'all)
+                           '((10 . "Possibly mistyped `:?' at start of group"))
+                         nil)))
         ))))
 
 (ert-deftest xr-lint-repetition-of-empty ()
