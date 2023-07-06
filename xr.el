@@ -103,7 +103,7 @@
   (when warnings
     (push (cons (1- position) message) (car warnings))))
 
-(defun xr--parse-char-alt (negated warnings _checks)
+(defun xr--parse-char-alt (negated warnings checks)
   (let ((start-pos (point))
         (intervals nil)
         (classes nil)
@@ -166,7 +166,18 @@
              warnings (point)
              (format-message
               "Range `%c-%c' between upper and lower case includes symbols"
-              start end))))
+              start end)))
+           ;; Ranges on the form +-X and X-+ are likely to be a
+           ;; mistake because matching both + and - is common.
+           ((and (eq checks 'all)
+                 (or (eq start ?+) (eq end ?+)))
+            (xr--report
+             warnings (point)
+             (xr--escape-string
+              (format-message
+               "Suspect character range `%c-%c': should `-' be literal?"
+               start end)
+              nil))))
 
           (forward-char 3)))
        ;; single character (including ], ^ and -)

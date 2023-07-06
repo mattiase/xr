@@ -477,6 +477,19 @@
                    '((1 . "Range `A-z' between upper and lower case includes symbols"))))
     ))
 
+(ert-deftest xr-lint-noisy ()
+  (let ((text-quoting-style 'grave))
+    (dolist (checks '(nil all))
+      (ert-info ((prin1-to-string checks) :prefix "checks: ")
+        (should
+         (equal
+          (xr-lint "[0-9+-/*][&-+=]" nil checks)
+          (if (eq checks 'all)
+              '((4 . "Suspect character range `+-/': should `-' be literal?")
+                (10 . "Suspect character range `&-+': should `-' be literal?"))
+            nil)))
+        ))))
+
 (ert-deftest xr-lint-repetition-of-empty ()
   (let ((text-quoting-style 'grave))
     (should (equal
