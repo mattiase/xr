@@ -499,6 +499,15 @@
                        (if (eq checks 'all)
                            '((10 . "Possibly mistyped `:?' at start of group"))
                          nil)))
+        (should
+         (equal
+          (xr-lint "%\\|[abc]\\|[[:digit:]]\\|\\s-\\|\\s_"
+                   nil checks)
+          (if (eq checks 'all)
+              '((3 . "Or-pattern more efficiently expressed as character alternative")
+                (10 . "Or-pattern more efficiently expressed as character alternative")
+                (23 . "Or-pattern more efficiently expressed as character alternative"))
+            nil)))
         ))))
 
 (ert-deftest xr-lint-repetition-of-empty ()

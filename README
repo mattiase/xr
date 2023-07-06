@@ -143,6 +143,15 @@ The xr package can be used interactively or by other code as a library.
     A character class occurs twice in a single character alternative
     or skip set.
 
+  - Or-pattern more efficiently expressed as character alternative
+
+    When an or-pattern can be written as a character alternative, it
+    becomes more efficient and reduces regexp stack usage.
+    For example, a\|b is better written [ab], and \s-\|\sw is usually
+    better written [[:space:][:word:]]. (There is a subtle difference
+    in how syntax properties are handled but it rarely matters.)
+    This check is only enable when CHECKS=all.
+
   - Duplicated alternative branch
 
     The same expression occurs in two different branches, like in

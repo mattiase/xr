@@ -1481,6 +1481,27 @@ A-SETS and B-SETS are arguments to `any'."
 
        (_ (equal a b))))))
 
+(defun xr--char-alt-equivalent-p (x)
+  "Whether X could be expressed as a combinable character alternative."
+  ;; We exclude `nonl' because it is either something we warn about anyway
+  ;; because of subsumption or patterns like (or nonl "\n") which is just
+  ;; a way of expressing `anychar' in a slightly less efficient way.
+  ;; We also exclude `not'-forms because they usually don't combine in an
+  ;; `or'-expressions to make an `any' form.
+  (pcase x
+    ((pred stringp) (= (length x) 1))
+    ((or 'ascii 'alnum 'alpha 'blank 'cntrl 'digit 'graph
+         'lower 'multibyte 'nonascii 'print 'punct 'space
+         'unibyte 'upper 'word 'xdigit
+         'anything)
+     t)
+    (`(any . ,_) t)
+    ;; Assume for this purpose that \sw and \s- are equivalent to
+    ;; [[:word:]] and [[:space:]] even though they differ in whether syntax
+    ;; properties are respected, because for most uses this doesn't matter.
+    (`(syntax ,(or 'word 'whitespace)) t)
+    (`(or . ,ys) (cl-every #'xr--char-alt-equivalent-p ys))))
+
 (defun xr--parse-alt (warnings purpose checks)
   (let ((alternatives nil))             ; reversed
     (push (xr--parse-seq warnings purpose checks) alternatives)
@@ -1499,7 +1520,14 @@ A-SETS and B-SETS are arguments to `any'."
            ((cl-some (lambda (branch) (xr--superset-p branch seq))
                      alternatives)
             (xr--report warnings pos
-                        "Branch matches subset of a previous branch"))))
+                        "Branch matches subset of a previous branch"))
+           ((and (eq checks 'all)
+                 (xr--char-alt-equivalent-p (car alternatives))
+                 (xr--char-alt-equivalent-p seq))
+            (xr--report
+             warnings pos
+             "Or-pattern more efficiently expressed as character alternative"))
+           ))
         (push seq alternatives)))
     (if (cdr alternatives)
         ;; Simplify (or nonl "\n") to anything
