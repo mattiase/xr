@@ -307,7 +307,9 @@
                  "(group-n 7 ?f)\n"))
   (should (equal (xr-pp-rx-to-str '(backref 12 ?g))
                  "(backref 12 ?g)\n"))
-  (let ((indent-tabs-mode nil))
+  (defvar pp-default-function)   ; introduced in Emacs 30
+  (let ((indent-tabs-mode nil)
+        (pp-default-function 'pp-28))
     (should (equal (xr-pp-rx-to-str
                     '(seq (1+ nonl
                               (or "a"
