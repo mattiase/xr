@@ -256,6 +256,18 @@ The xr package can be used interactively or by other code as a library.
     In general, A?, where A matches the empty string, can be
     simplified to just A.
 
+  - Repetition of effective repetition
+
+    A repetition construct is applied to an expression that itself
+    contains a repetition, in addition to some patterns that may match
+    the empty string. This can lead to bad matching performance.
+
+    Example: \(?:a*b+\)* is equivalent to the much faster \(?:a\|b\)* .
+
+    Another example: \(?:a*b+\)+ is better written a*b[ab]* .
+
+    This check is only enable when CHECKS=all.
+
   - Possibly mistyped ':?' at start of group
 
     A group starts as \(:? which makes it likely that it was really

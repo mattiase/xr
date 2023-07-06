@@ -508,6 +508,10 @@
                 (10 . "Or-pattern more efficiently expressed as character alternative")
                 (23 . "Or-pattern more efficiently expressed as character alternative"))
             nil)))
+        (should (equal (xr-lint "\\(?:a?b+c?d*\\)*" nil checks)
+                       (if (eq checks 'all)
+                           '((14 . "Repetition of effective repetition"))
+                         nil)))
         ))))
 
 (ert-deftest xr-lint-repetition-of-empty ()

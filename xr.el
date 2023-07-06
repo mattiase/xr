@@ -648,7 +648,24 @@ like (* (* X) ... (* X))."
                         (if (eq operator-char ??)
                             "Optional expression"
                           "Repetition of expression")
-                        " matching an empty string")))))
+                        " matching an empty string")))
+                     ((and (eq checks 'all)
+                           (memq operator-char '(?* ?+))
+                           (consp operand)
+                           (eq (car operand) 'seq)
+                           (let ((nonzero-items
+                                  (mapcan
+                                   (lambda (item)
+                                     (and (not (xr--matches-empty-p item))
+                                          (list item)))
+                                   (cdr operand))))
+                             (and (= (length nonzero-items) 1)
+                                  (consp (car nonzero-items))
+                                  (memq (caar nonzero-items)
+                                        '( opt zero-or-more one-or-more
+                                           +? *? ?? >=)))))
+                      (xr--report warnings item-start
+                                  "Repetition of effective repetition"))))
                   ;; (* (* X) ... (* X)) etc: wrap-around subsumption
                   (unless (eq operator-char ??)
                     (xr--check-wrap-around-repetition
