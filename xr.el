@@ -204,6 +204,19 @@
            warnings (point)
            (format-message
             "Literal `-' not first or last in character alternative")))
+        (when (eq checks 'all)
+          (let ((last (car-safe intervals)))
+            (when (and last
+                       (eq (aref last 1) ?\\)
+                       (or (memq ch '( ?t ?n ?r ?f ?x ?e ?b  ; char escapes
+                                       ?s ?S ?d ?D ?w ?W))   ; PCRE sequences
+                           (and (<= ?0 ch ?7)))              ; octal escapes
+                       ;; Suppress some common false positives, eg [\\nrt]
+                       (not (looking-at-p (rx (= 2 (in "tnrfeb"))))))
+              (xr--report
+               warnings (- (point) 1)
+               (format-message
+                "Possibly erroneous `\\%c' in character alternative" ch)))))
         (push (vector ch ch (point)) intervals)
         (forward-char))))
 

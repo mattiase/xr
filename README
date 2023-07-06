@@ -127,6 +127,17 @@ The xr package can be used interactively or by other code as a library.
     + and -.
     This check is only enable when CHECKS=all.
 
+  - Possibly erroneous '\X' in character alternative
+
+    A character alternative includes something that looks like a
+    escape sequence, but no escape sequences are allowed there since
+    backslash is not a special character in that context.
+    It could also be a caused by too many backslashes.
+
+    For example, "[\\n\\t]" matches the characters 'n', 't' and
+    backslash, but could be an attempt to match newline and tab.
+    This check is only enable when CHECKS=all.
+
   - Duplicated character class '[:class:]'
 
     A character class occurs twice in a single character alternative
