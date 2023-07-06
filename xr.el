@@ -103,7 +103,7 @@
   (when warnings
     (push (cons (1- position) message) (car warnings))))
 
-(defun xr--parse-char-alt (negated warnings)
+(defun xr--parse-char-alt (negated warnings _checks)
   (let ((start-pos (point))
         (intervals nil)
         (classes nil)
@@ -516,7 +516,7 @@ like (* (* X) ... (* X))."
                  "First item in repetition subsumes last item (wrapped)"
                "Last item in repetition subsumes first item (wrapped)"))))))))
 
-(defun xr--parse-seq (warnings purpose)
+(defun xr--parse-seq (warnings purpose checks)
   (let ((sequence nil)                 ; reversed
         (at-end nil))
     (while (not at-end)
@@ -570,7 +570,7 @@ like (* (* X) ... (* X))."
           (forward-char)
           (let ((negated (eq (following-char) ?^)))
             (when negated (forward-char))
-            (push (xr--parse-char-alt negated warnings) sequence)))
+            (push (xr--parse-char-alt negated warnings checks) sequence)))
 
          ;; * ? + (and non-greedy variants)
          ((memq next-char '(?* ?? ?+))
@@ -663,7 +663,7 @@ like (* (* X) ... (* X))."
                             (string-to-number (match-string 1)))
                            (t (error "Invalid \\(? syntax"))))
                       'unnumbered))
-                   (group (xr--parse-alt warnings purpose))
+                   (group (xr--parse-alt warnings purpose checks))
                    ;; simplify - group has an implicit seq
                    (operand (if (and (listp group) (eq (car group) 'seq))
                                 (cdr group)
@@ -1448,13 +1448,13 @@ A-SETS and B-SETS are arguments to `any'."
 
        (_ (equal a b))))))
 
-(defun xr--parse-alt (warnings purpose)
+(defun xr--parse-alt (warnings purpose checks)
   (let ((alternatives nil))             ; reversed
-    (push (xr--parse-seq warnings purpose) alternatives)
+    (push (xr--parse-seq warnings purpose checks) alternatives)
     (while (not (looking-at (rx (or "\\)" eos))))
       (forward-char 2)                  ; skip \|
       (let ((pos (point))
-            (seq (xr--parse-seq warnings purpose)))
+            (seq (xr--parse-seq warnings purpose checks)))
         (when warnings
           (cond
            ((member seq alternatives)
@@ -1475,13 +1475,13 @@ A-SETS and B-SETS are arguments to `any'."
           (cons 'or (nreverse alternatives)))
       (car alternatives))))
 
-(defun xr--parse (re-string warnings purpose)
+(defun xr--parse (re-string warnings purpose checks)
   (with-temp-buffer
     (set-buffer-multibyte t)
     (insert re-string)
     (goto-char (point-min))
     (let* ((case-fold-search nil)
-           (rx (xr--parse-alt warnings purpose)))
+           (rx (xr--parse-alt warnings purpose checks)))
       (when (looking-at (rx "\\)"))
         (error "Unbalanced \\)"))
       rx)))
@@ -1760,7 +1760,7 @@ and is one of:
 `medium' or nil -- somewhat verbose keywords (the default)
 `brief'         -- short keywords
 `terse'         -- very short keywords"
-  (xr--in-dialect (xr--parse re-string nil nil) dialect))
+  (xr--in-dialect (xr--parse re-string nil nil nil) dialect))
 
 ;;;###autoload
 (defun xr-skip-set (skip-set-string &optional dialect)
@@ -1774,16 +1774,22 @@ See `xr' for a description of the DIALECT argument."
   (xr--in-dialect (xr--parse-skip-set skip-set-string nil) dialect))
 
 ;;;###autoload
-(defun xr-lint (re-string &optional purpose)
+(defun xr-lint (re-string &optional purpose checks)
   "Detect dubious practices and possible mistakes in RE-STRING.
 This includes uses of tolerated but discouraged constructs.
 Outright regexp syntax violations are signalled as errors.
+
 If PURPOSE is `file', perform additional checks assuming that RE-STRING
 is used to match a file name.
+
+If CHECKS is absent or nil, only perform checks that are very
+likely to indicate mistakes; if `all', include all checks,
+including ones more likely to generate false alarms.
+
 Return a list of (OFFSET . COMMENT) where COMMENT applies at OFFSET
 in RE-STRING."
   (let ((warnings (list nil)))
-    (xr--parse re-string warnings purpose)
+    (xr--parse re-string warnings purpose checks)
     (sort (car warnings) #'car-less-than-car)))
 
 ;;;###autoload
