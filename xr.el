@@ -150,14 +150,24 @@
               (format-message "Reversed range `%c-%c' matches nothing"
                               start end)
               nil))))
-          ;; Suppress warnings about ranges between adjacent digits,
-          ;; like [0-1], as they are common and harmless.
-          (when (and (= end (1+ start)) (not (<= ?0 start end ?9)))
+          (cond
+           ;; Suppress warnings about ranges between adjacent digits,
+           ;; like [0-1], as they are common and harmless.
+           ((and (= end (1+ start)) (not (<= ?0 start end ?9)))
             (xr--report warnings (point)
                         (xr--escape-string
                          (format-message "Two-character range `%c-%c'"
                                          start end)
                          nil)))
+           ;; This warning is not necessarily free of false positives,
+           ;; although they are unlikely. Maybe it should be off by default?
+           ((and (<= ?A start ?Z) (<= ?a end ?z))
+            (xr--report
+             warnings (point)
+             (format-message
+              "Range `%c-%c' between upper and lower case includes symbols"
+              start end))))
+
           (forward-char 3)))
        ;; single character (including ], ^ and -)
        (t

@@ -113,6 +113,13 @@ The xr package can be used interactively or by other code as a library.
     consecutive character codes. This is often caused by a misplaced
     hyphen.
 
+  - Range 'A-z' between upper and lower case includes symbols
+
+    A range spans over upper and lower case letters, which also
+    includes some symbols. This is probably unintentional. To cover
+    both upper and lower case letters, use separate ranges, as in
+    [A-Za-z].
+
   - Duplicated character class '[:class:]'
 
     A character class occurs twice in a single character alternative

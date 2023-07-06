@@ -454,6 +454,8 @@
                    '((4 . "Ranges `\x70-\\x7f' and `\x7e-å' overlap"))))
     (should (equal (xr-lint "[\x70-\x8få-\x82]")
                    '((4 . "Ranges `å-\\x82' and `\\x80-\\x8f' overlap"))))
+    (should (equal (xr-lint "[A-z]")
+                   '((1 . "Range `A-z' between upper and lower case includes symbols"))))
     ))
 
 (ert-deftest xr-lint-repetition-of-empty ()
