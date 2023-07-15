@@ -811,6 +811,30 @@
                    '((3 . "Ranges `å-\\x82' and `\\x80-\\x8f' overlap"))))
     ))
 
+;;; Unit tests for internal functions
+
+(ert-deftest xr--tristate-some ()
+  (should (equal (xr--tristate-some #'car '()) nil))
+  (should (equal (xr--tristate-some #'car '((nil) (nil) (nil))) nil))
+  (should (equal (xr--tristate-some #'car '((nil) (sometimes) (nil)))
+                 'sometimes))
+  (should (equal (xr--tristate-some #'car '((nil) (sometimes) (always) (nil)
+                                            (sometimes)))
+                 'always)))
+
+(ert-deftest xr--tristate-all ()
+  (should (equal (xr--tristate-all #'car '()) 'always))
+  (should (equal (xr--tristate-all #'car '((always) (always) (always)))
+                 'always))
+  (should (equal (xr--tristate-all #'car '((nil) (nil) (nil))) nil))
+  (should (equal (xr--tristate-all #'car '((nil) (sometimes) (nil)))
+                 'sometimes))
+  (should (equal (xr--tristate-all #'car '((nil) (sometimes) (always) (nil)))
+                 'sometimes))
+  (should (equal (xr--tristate-all #'car '((always) (nil)))
+                 'sometimes)))
+
+
 (provide 'xr-test)
 
 ;;; xr-test.el ends here
