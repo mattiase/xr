@@ -956,7 +956,7 @@ nil if RX only matches the empty string."
                            (cdr item)))))
 
 (defun xr--starts-with-nonl (item)
-  "Whether ITEM starts with a non-newline. Return `always', `maybe' or nil."
+  "Whether ITEM starts with a non-newline. Return `always', `sometimes' or nil."
   (pcase item
     ((pred stringp)
      (and (> (length item) 0) (not (eq (aref item 0) ?\n)) 'always))
@@ -981,7 +981,7 @@ nil if RX only matches the empty string."
      'always)))
 
 (defun xr--ends-with-nonl (item)
-  "Whether ITEM ends with a non-newline. Return `always', `maybe' or nil."
+  "Whether ITEM ends with a non-newline. Return `always', `sometimes' or nil."
   (pcase item
     ((pred stringp)
      (and (> (length item) 0) (not (eq (aref item (1- (length item))) ?\n))
