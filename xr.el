@@ -765,7 +765,13 @@ like (* (* X) ... (* X))."
             (forward-char)
             (let ((sym (cdr (assq
                              next-char
-                             '((?w . wordchar) (?W . not-wordchar)
+                             ;; Note that translating \w to wordchar isn't
+                             ;; right, since `wordchar' yields [[:word:]] which
+                             ;; does not respect syntax properties.
+                             ;; We translate \W to (not (syntax word)) for
+                             ;; consistency, rather than the confusingly
+                             ;; named legacy `not-wordchar'.
+                             '((?w . (syntax word)) (?W . (not (syntax word)))
                                (?` . bos) (?\' . eos)
                                (?= . point)
                                (?b . word-boundary) (?B . not-word-boundary)

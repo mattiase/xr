@@ -77,7 +77,7 @@
 
 (ert-deftest xr-misc ()
   (should (equal (xr "^.\\w\\W\\`\\'\\=\\b\\B\\<\\>\\_<\\_>$")
-                 '(seq bol nonl wordchar not-wordchar bos eos point
+                 '(seq bol nonl (syntax word) (not (syntax word)) bos eos point
                        word-boundary not-word-boundary bow eow
                        symbol-start symbol-end eol)))
   (should-error (xr "\\_a"))
