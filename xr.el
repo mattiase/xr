@@ -574,10 +574,10 @@ like (* (* X) ... (* X))."
 
          ;; * ? + (and non-greedy variants)
          ((memq next-char '(?* ?? ?+))
-          ;; - not special at beginning of sequence or after ^
+          ;; - not special at beginning of sequence or after ^ or \`
           (if (and sequence
-                   (not (and (eq (car sequence) 'bol)
-                             (eq (preceding-char) ?^))))
+                   (not (and (memq (car sequence) '(bol bos))
+                             (memq (preceding-char) '(?^ ?`)))))
               (let ((operator-char next-char)
                     (lazy (eq (char-after (1+ item-start)) ??))
                     (operand (car sequence)))
@@ -679,11 +679,11 @@ like (* (* X) ... (* X))."
                                 (t group))))
                 (push item sequence))))
 
-           ;; \{..\} - not special at beginning of sequence or after ^
+           ;; \{..\} - not special at beginning of sequence or after ^ or \`
            ((eq next-char ?\{)
             (if (and sequence
-                     (not (and (eq (car sequence) 'bol)
-                               (eq (char-after (1- item-start)) ?^))))
+                     (not (and (memq (car sequence) '(bol bos))
+                               (memq (char-after (1- item-start)) '(?^ ?`)))))
                 (progn
                   (forward-char)
                   (let ((operand (car sequence)))
