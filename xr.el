@@ -1757,9 +1757,9 @@ Passing the returned value to `rx' (or `rx-to-string') yields a regexp string
 equivalent to RE-STRING.  DIALECT controls the choice of keywords,
 and is one of:
 `verbose'       -- verbose keywords
+`medium' or nil -- somewhat verbose keywords (the default)
 `brief'         -- short keywords
-`terse'         -- very short keywords
-`medium' or nil -- a compromise (the default)"
+`terse'         -- very short keywords"
   (xr--in-dialect (xr--parse re-string nil nil) dialect))
 
 ;;;###autoload
