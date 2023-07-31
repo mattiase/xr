@@ -1213,7 +1213,7 @@ a range (pair of chars), or a class (symbol). If in doubt, return t."
       (cond
        ;; Some reasonably conservative subsets of `space' and `word'.
        ((eq a 'space)
-        (not (string-match-p (rx (any (33 . 126))) (char-to-string b))))
+        (not (<= 33 b 126)))
        ((eq a 'word)
         (not (memq b '(?\s ?\t ?\f ?\r))))
        (t
