@@ -3,7 +3,7 @@
 ;; Copyright (C) 2019-2023 Free Software Foundation, Inc.
 
 ;; Author: Mattias Engdegård <mattiase@acm.org>
-;; Version: 1.23
+;; Version: 1.24
 ;; Package-Requires: ((emacs "26.1"))
 ;; URL: https://github.com/mattiase/xr
 ;; Keywords: lisp, regexps
@@ -29,6 +29,17 @@
 
 ;;; News:
 
+;; Version 1.24:
+;; - \w and \W are now translated to (syntax word) and (not (syntax word)),
+;;   instead of [[:word:]] and [^[:word:]] which are not exact equivalents.
+;; - Repetition operators are now literals after \`. For example,
+;;   \`* is now (seq bos "*"), not (* bos), because this is how Emacs works.
+;; - New lint check: find [A-z] (range between upper and lower case)
+;; - New `checks' argument to xr-lint, used to enable these new checks:
+;;   - Detect [+-X] and [X-+] (range to/from '+')
+;;   - Detect [\\t] etc (escape sequences in character alternative)
+;;   - Detect \(:?...\), as a possible typo for \(?:...\)
+;;   - Detect a\|b that could be [ab] which is more efficient
 ;; Version 1.23:
 ;; - Represent explicitly the gap in ranges from ASCII to raw bytes:
 ;;   "[A-\xbb]" becomes (any "A-\x7f\x80-\xbb") because that is how
