@@ -1877,6 +1877,8 @@ including ones more likely to generate false alarms.
 
 Return a list of (OFFSET . COMMENT) where COMMENT applies at OFFSET
 in RE-STRING."
+  (unless (memq checks '(nil all))
+    (error "Bad xr-lint CHECKS argument: %S" checks))
   (let ((warnings (list nil)))
     (xr--parse re-string warnings purpose checks)
     (sort (car warnings) #'car-less-than-car)))

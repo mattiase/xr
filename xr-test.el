@@ -478,6 +478,7 @@
     ))
 
 (ert-deftest xr-lint-noisy ()
+  (should-error (xr-lint "." nil 'bad))
   (let ((text-quoting-style 'grave))
     (dolist (checks '(nil all))
       (ert-info ((prin1-to-string checks) :prefix "checks: ")
