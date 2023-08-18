@@ -114,6 +114,22 @@
   (when warnings
     (push (cons (1- position) message) (car warnings))))
 
+;; House versions of `cl-some' and `cl-every', but faster.
+
+(defmacro xr--some (pred list)
+  "Whether PRED is true for at least one element in LIST."
+  `(let ((list ,list))
+     (while (and list (not (funcall ,pred (car list))))
+       (setq list (cdr list)))
+     list))
+
+(defmacro xr--every (pred list)
+  "Whether PRED is true for all elements in LIST."
+  `(let ((list ,list))
+     (while (and list (funcall ,pred (car list)))
+       (setq list (cdr list)))
+     (not list)))
+
 (defun xr--parse-char-alt (negated warnings checks)
   (let ((start-pos (point))
         (intervals nil)
@@ -478,18 +494,18 @@ UPPER may be nil, meaning infinity."
   "Whether RX can match the empty string regardless of context."
   (pcase rx
     (`(,(or 'seq 'one-or-more '+? 'group) . ,body)
-     (cl-every #'xr--matches-empty-p body))
+     (xr--every #'xr--matches-empty-p body))
     (`(or . ,body)
-     (cl-some #'xr--matches-empty-p body))
+     (xr--some #'xr--matches-empty-p body))
     (`(group-n ,_ . ,body)
-     (cl-every #'xr--matches-empty-p body))
+     (xr--every #'xr--matches-empty-p body))
     (`(,(or 'opt 'zero-or-more ?? '*?) . ,_)
      t)
     (`(repeat ,from ,_ . ,body)
      (or (= from 0)
-         (cl-every #'xr--matches-empty-p body)))
+         (xr--every #'xr--matches-empty-p body)))
     (`(,(or '= '>=) ,_ . ,body)
-     (cl-every #'xr--matches-empty-p body))
+     (xr--every #'xr--matches-empty-p body))
     ("" t)))
 
 (defun xr--adjacent-subsumption (a b)
@@ -1010,11 +1026,11 @@ nil if RX only matches the empty string."
      (xr--tristate-some #'xr--matches-nonempty body))
     (`(repeat ,from ,_ . ,body)
      (if (= from 0)
-         (and (cl-some #'xr--matches-nonempty body) 'sometimes)
+         (and (xr--some #'xr--matches-nonempty body) 'sometimes)
        (xr--tristate-some #'xr--matches-nonempty body)))
     (`(,(or '= '>=) ,n . ,body)
      (if (= n 0)
-         (and (cl-some #'xr--matches-nonempty body) 'sometimes)
+         (and (xr--some #'xr--matches-nonempty body) 'sometimes)
        (xr--tristate-some #'xr--matches-nonempty body)))
     (`(,(or 'any 'not 'intersection 'syntax 'category) . ,_) 'always)
     ((or 'ascii 'alnum 'alpha 'blank 'cntrl 'digit 'graph
@@ -1194,7 +1210,7 @@ a range (pair of chars), or a class (symbol)."
      (t   ; b is a range.
       ;; For simplicity, only check ASCII ranges.
       (and (<= (cdr b) 127)
-           (cl-some
+           (xr--some
             (lambda (a-range) (and (<= (car a-range) (car b))
                                    (<= (cdr b) (cdr a-range))))
             (cdr (assq a '((alpha (?A . ?Z) (?a . ?z))
@@ -1290,12 +1306,12 @@ a range (pair of chars), or a class (symbol). If in doubt, return t."
        ((and (> (cdr b) 127)
              (not (memq a '(cntrl ascii digit xdigit)))))
        ((eq a 'space)
-        (not (cl-some (lambda (a-range) (and (<= (car a-range) (cdr b))
-                                             (<= (car b) (cdr a-range))))
-                      '((?0 . ?9) (?A . ?Z) (?a . ?z)))))
+        (not (xr--some (lambda (a-range) (and (<= (car a-range) (cdr b))
+                                              (<= (car b) (cdr a-range))))
+                       '((?0 . ?9) (?A . ?Z) (?a . ?z)))))
        ((eq a 'word))
        (t
-        (cl-some
+        (xr--some
          (lambda (a-range) (and (<= (car a-range) (cdr b))
                                 (<= (car b) (cdr a-range))))
          (cdr (assq a '((alpha (?A . ?Z) (?a . ?z))
@@ -1326,16 +1342,16 @@ a range (pair of chars), or a class (symbol). If in doubt, return t."
 A-SETS and B-SETS are arguments to `any'."
   (let ((a-items (mapcan #'xr--any-arg-to-items a-sets))
         (b-items (mapcan #'xr--any-arg-to-items b-sets)))
-    (cl-every (lambda (b-item)
-                (if negated
-                    (not (cl-some
-                          (lambda (a-item)
-                            (xr--any-item-may-intersect-p b-item a-item))
-                          a-items))
-                  (cl-some (lambda (a-item)
-                             (xr--any-item-superset-p a-item b-item))
-                           a-items)))
-              b-items)))
+    (xr--every (lambda (b-item)
+                 (if negated
+                     (not (xr--some
+                           (lambda (a-item)
+                             (xr--any-item-may-intersect-p b-item a-item))
+                           a-items))
+                   (xr--some (lambda (a-item)
+                               (xr--any-item-superset-p a-item b-item))
+                             a-items)))
+               b-items)))
 
 (defun xr--char-superset-of-rx-p (sets negated rx)
   "Whether SETS, possibly NEGATED, is a superset of RX."
@@ -1437,7 +1453,7 @@ A-SETS and B-SETS are arguments to `any'."
 
   (pcase b
     (`(or . ,b-body)
-     (cl-every (lambda (b-expr) (xr--superset-p a b-expr)) b-body))
+     (xr--every (lambda (b-expr) (xr--superset-p a b-expr)) b-body))
     (_
      (pcase a
        (`(any . ,sets)
@@ -1465,7 +1481,7 @@ A-SETS and B-SETS are arguments to `any'."
           (_
            (xr--superset-seq-p a-body (list b)))))
        (`(or . ,a-body)
-        (cl-some (lambda (a-expr) (xr--superset-p a-expr b)) a-body))
+        (xr--some (lambda (a-expr) (xr--superset-p a-expr b)) a-body))
 
        (`(zero-or-more . ,a-body)
         (pcase b
@@ -1528,7 +1544,7 @@ A-SETS and B-SETS are arguments to `any'."
     ;; [[:word:]] and [[:space:]] even though they differ in whether syntax
     ;; properties are respected, because for most uses this doesn't matter.
     (`(syntax ,(or 'word 'whitespace)) t)
-    (`(or . ,ys) (cl-every #'xr--char-alt-equivalent-p ys))))
+    (`(or . ,ys) (xr--every #'xr--char-alt-equivalent-p ys))))
 
 (defun xr--parse-alt (warnings purpose checks)
   (let ((alternatives nil))             ; reversed
@@ -1541,12 +1557,12 @@ A-SETS and B-SETS are arguments to `any'."
           (cond
            ((member seq alternatives)
             (xr--report warnings pos "Duplicated alternative branch"))
-           ((cl-some (lambda (branch) (xr--superset-p seq branch))
-                     alternatives)
+           ((xr--some (lambda (branch) (xr--superset-p seq branch))
+                      alternatives)
             (xr--report warnings pos
                         "Branch matches superset of a previous branch"))
-           ((cl-some (lambda (branch) (xr--superset-p branch seq))
-                     alternatives)
+           ((xr--some (lambda (branch) (xr--superset-p branch seq))
+                      alternatives)
             (xr--report warnings pos
                         "Branch matches subset of a previous branch"))
            ((and (eq checks 'all)
