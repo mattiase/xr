@@ -1451,79 +1451,97 @@ A-SETS and B-SETS are arguments to `any'."
   (setq a (xr--expand-strings a))
   (setq b (xr--expand-strings b))
 
-  (pcase b
-    (`(or . ,b-body)
-     (xr--every (lambda (b-expr) (xr--superset-p a b-expr)) b-body))
-    (_
-     (pcase a
-       (`(any . ,sets)
-        (xr--char-superset-of-rx-p sets nil b))
-       (`(not (any . ,sets))
-        (xr--char-superset-of-rx-p sets t b))
-       ((or 'ascii 'alnum 'alpha 'blank 'cntrl 'digit 'graph
-            'lower 'multibyte 'nonascii 'print 'punct 'space
-            'unibyte 'upper 'word 'xdigit)
-        (xr--char-superset-of-rx-p (list a) nil b))
-       (`(not ,(and sym
-                    (or 'ascii 'alnum 'alpha 'blank 'cntrl 'digit 'graph
-                        'lower 'multibyte 'nonascii 'print 'punct 'space
-                        'unibyte 'upper 'word 'xdigit)))
-        (xr--char-superset-of-rx-p (list sym) t b))
+  (cond
+   ((eq (car-safe b) 'or)
+    (xr--every (lambda (b-expr) (xr--superset-p a b-expr)) (cdr b)))
+   ((consp a)
+    (let ((a-op (car a))
+          (a-body (cdr a)))
+      (cond
+       ((eq a-op 'any)
+        (xr--char-superset-of-rx-p a-body nil b))
+       ((eq a-op 'not)
+        (let ((a-not-arg (nth 1 a)))
+          (cond ((eq (car-safe a-not-arg) 'any)
+                 (xr--char-superset-of-rx-p (cdr a-not-arg) t b))
+                ((eq (car-safe a-not-arg) 'syntax)
+                 (or (equal a b)
+                     (xr--syntax-superset-of-rx-p (nth 1 a-not-arg) t b)))
+                ((eq (car-safe a-not-arg) 'category)
+                 (or (equal a b)
+                     (and (characterp b)
+                          (string-match-p (rx-to-string a)
+                                          (char-to-string b)))))
+                ((memq a-not-arg
+                       '( ascii alnum alpha blank cntrl digit graph
+                          lower multibyte nonascii print punct space
+                          unibyte upper word xdigit))
+                 (xr--char-superset-of-rx-p (list a-not-arg) t b))
+                (t (equal a b)))))
 
-       ('nonl (xr--single-non-newline-char-p b))
-
-       ('anything (xr--single-char-p b))
-
-       (`(seq . ,a-body)
-        (pcase b
-          (`(seq . ,b-body)
-           (xr--superset-seq-p a-body b-body))
-          (_
-           (xr--superset-seq-p a-body (list b)))))
-       (`(or . ,a-body)
-        (xr--some (lambda (a-expr) (xr--superset-p a-expr b)) a-body))
-
-       (`(zero-or-more . ,a-body)
-        (pcase b
-          (`(,(or 'opt 'zero-or-more 'one-or-more) . ,b-body)
-           (xr--superset-p (xr--make-seq a-body) (xr--make-seq b-body)))
-          (_ (xr--superset-p (xr--make-seq a-body) b))))
-       (`(one-or-more . ,a-body)
-        (pcase b
-          (`(one-or-more . ,b-body)
-           (xr--superset-p (xr--make-seq a-body) (xr--make-seq b-body)))
-          (_ (xr--superset-p (xr--make-seq a-body) b))))
-       (`(opt . ,a-body)
-        (pcase b
-          (`(opt . ,b-body)
-           (xr--superset-p (xr--make-seq a-body) (xr--make-seq b-body)))
-          (_ (xr--superset-p (xr--make-seq a-body) b))))
-       (`(repeat ,lo ,_ . ,a-body)
-        (if (<= lo 1)
-            (xr--superset-p (xr--make-seq a-body) b)
-          (equal a b)))
-       
-       ;; We do not expand through groups on the subset (b) side to
-       ;; avoid false positives; "\\(a\\)\\|." should be without warning.
-       (`(group . ,body)
-        (xr--superset-p (xr--make-seq body) b))
-       (`(group-n ,_ . ,body)
-        (xr--superset-p (xr--make-seq body) b))
-
-       (`(syntax ,syn)
-        (or (equal a b) (xr--syntax-superset-of-rx-p syn nil b)))
-       (`(not (syntax ,syn))
-        (or (equal a b) (xr--syntax-superset-of-rx-p syn t b)))
-
-       ('wordchar (or (equal a b) (xr--syntax-superset-of-rx-p 'word nil b)))
-       ('not-wordchar (or (equal a b) (xr--syntax-superset-of-rx-p 'word t b)))
-
-       ((or `(category ,_) `(not (category ,_)))
+       ((eq a-op 'category)
         (or (equal a b)
             (and (characterp b)
                  (string-match-p (rx-to-string a) (char-to-string b)))))
 
-       (_ (equal a b))))))
+       ((eq a-op 'seq)
+        (if (eq (car-safe b) 'seq)
+            (let ((b-body (cdr b)))
+              (xr--superset-seq-p a-body b-body))
+          (xr--superset-seq-p a-body (list b))))
+
+       ((eq a-op 'or)
+        (xr--some (lambda (a-expr) (xr--superset-p a-expr b)) a-body))
+
+       ((eq a-op 'zero-or-more)
+        (if (memq (car-safe b) '(opt zero-or-more one-or-more))
+            (let ((b-body (cdr b)))
+              (xr--superset-p (xr--make-seq a-body) (xr--make-seq b-body)))
+          (xr--superset-p (xr--make-seq a-body) b)))
+       ((eq a-op 'one-or-more)
+        (if (eq (car-safe b) 'one-or-more)
+            (let ((b-body (cdr b)))
+              (xr--superset-p (xr--make-seq a-body) (xr--make-seq b-body)))
+          (xr--superset-p (xr--make-seq a-body) b)))
+       ((eq a-op 'opt)
+        (if (eq (car-safe b) 'opt)
+            (let ((b-body (cdr b)))
+              (xr--superset-p (xr--make-seq a-body) (xr--make-seq b-body)))
+          (xr--superset-p (xr--make-seq a-body) b)))
+       ((eq a-op 'repeat)
+        (let ((lo (car a-body))
+              (a-body (cddr a-body)))
+          (if (<= lo 1)
+              (xr--superset-p (xr--make-seq a-body) b)
+            (equal a b))))
+      
+       ;; We do not expand through groups on the subset (b) side to
+       ;; avoid false positives; "\\(a\\)\\|." should be without warning.
+       ((eq a-op 'group)
+        (xr--superset-p (xr--make-seq a-body) b))
+       ((eq a-op 'group-n)
+        (let ((a-body (cdr a-body)))
+          (xr--superset-p (xr--make-seq a-body) b)))
+
+       ((eq a-op 'syntax)
+        (or (equal a b) (xr--syntax-superset-of-rx-p (car a-body) nil b)))
+
+       (t (equal a b)))))
+
+   ((memq a '( ascii alnum alpha blank cntrl digit graph
+               lower multibyte nonascii print punct space
+               unibyte upper word xdigit))
+    (xr--char-superset-of-rx-p (list a) nil b))
+
+   ((eq a 'nonl) (xr--single-non-newline-char-p b))
+   ((eq a 'anything) (xr--single-char-p b))
+
+   ((eq a 'wordchar)
+    (or (equal a b) (xr--syntax-superset-of-rx-p 'word nil b)))
+   ((eq a 'not-wordchar)
+    (or (equal a b) (xr--syntax-superset-of-rx-p 'word t b)))
+
+   (t (equal a b))))
 
 (defun xr--char-alt-equivalent-p (x)
   "Whether X could be expressed as a combinable character alternative."
