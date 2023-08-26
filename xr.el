@@ -802,13 +802,13 @@ like (* (* X) ... (* X))."
                                         (opt (group ",")
                                              (opt (group (one-or-more digit))))
                                         "\\}"))
-                        (let ((lower (if (match-string 1)
+                        (let ((lower (if (match-beginning 1)
                                          (string-to-number (match-string 1))
                                        0))
                               (comma (match-string 2))
-                              (upper (and (match-string 3)
+                              (upper (and (match-beginning 3)
                                           (string-to-number (match-string 3)))))
-                          (unless (or (match-beginning 1) (match-string 3))
+                          (unless (or (match-beginning 1) (match-beginning 3))
                             (xr--report warnings (- (match-beginning 0) 2)
                                         (if comma
                                             "Uncounted repetition"
