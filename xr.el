@@ -237,7 +237,7 @@
                        (eq (aref last 1) ?\\)
                        (or (memq ch '( ?t ?n ?r ?f ?x ?e ?b  ; char escapes
                                        ?s ?S ?d ?D ?w ?W))   ; PCRE sequences
-                           (and (<= ?0 ch ?7)))              ; octal escapes
+                           (<= ?0 ch ?7))                    ; octal escapes
                        ;; Suppress some common false positives, eg [\\nrt]
                        (not (looking-at-p (rx (= 2 (in "tnrfeb"))))))
               (xr--report
