@@ -3,7 +3,7 @@
 ;; Copyright (C) 2019-2023 Free Software Foundation, Inc.
 
 ;; Author: Mattias Engdegård <mattiase@acm.org>
-;; Version: 1.24
+;; Version: 1.25
 ;; Package-Requires: ((emacs "26.1"))
 ;; URL: https://github.com/mattiase/xr
 ;; Keywords: lisp, regexps
@@ -29,6 +29,9 @@
 
 ;;; News:
 
+;; Version 1.25:
+;; - Effective repetition of repetition check now always enabled
+;; - Some performance improvements
 ;; Version 1.24:
 ;; - \w and \W are now translated to (syntax word) and (not (syntax word)),
 ;;   instead of [[:word:]] and [^[:word:]] which are not exact equivalents.
@@ -40,6 +43,7 @@
 ;;   - Detect [\\t] etc (escape sequences in character alternative)
 ;;   - Detect \(:?...\), as a possible typo for \(?:...\)
 ;;   - Detect a\|b that could be [ab] which is more efficient
+;;   - Detect effective repetition of repetition such as \(A+B*\)*
 ;; Version 1.23:
 ;; - Represent explicitly the gap in ranges from ASCII to raw bytes:
 ;;   "[A-\xbb]" becomes (any "A-\x7f\x80-\xbb") because that is how
