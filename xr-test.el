@@ -513,6 +513,10 @@
                        (if (eq checks 'all)
                            '((14 . "Repetition of effective repetition"))
                          nil)))
+        (should (equal (xr-lint "\\(a?b+c?d*\\)*" nil checks)
+                       (if (eq checks 'all)
+                           '((12 . "Repetition of effective repetition"))
+                         nil)))
         ))))
 
 (ert-deftest xr-lint-repetition-of-empty ()

@@ -679,7 +679,7 @@ like (* (* X) ... (* X))."
                      ((and (eq checks 'all)
                            (memq operator-char '(?* ?+))
                            (consp operand)
-                           (eq (car operand) 'seq)
+                           (memq (car operand) '(seq group))
                            (let ((nonzero-items
                                   (mapcan
                                    (lambda (item)
