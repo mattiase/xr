@@ -676,8 +676,7 @@ like (* (* X) ... (* X))."
                             "Optional expression"
                           "Repetition of expression")
                         " matching an empty string")))
-                     ((and (eq checks 'all)
-                           (memq operator-char '(?* ?+))
+                     ((and (memq operator-char '(?* ?+))
                            (consp operand)
                            (memq (car operand) '(seq group))
                            (let ((nonzero-items

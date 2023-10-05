@@ -266,8 +266,6 @@ The xr package can be used interactively or by other code as a library.
 
     Another example: \(?:a*b+\)+ is better written a*b[ab]* .
 
-    This check is only enabled when the 'checks' argument is 'all'.
-
   - Possibly mistyped ':?' at start of group
 
     A group starts as \(:? which makes it likely that it was really
