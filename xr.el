@@ -1603,7 +1603,6 @@ A-SETS and B-SETS are arguments to `any'."
 
 (defun xr--parse (re-string warnings purpose checks)
   (with-temp-buffer
-    (set-buffer-multibyte t)
     (insert re-string)
     (goto-char (point-min))
     (let* ((case-fold-search nil)
