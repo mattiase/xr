@@ -1913,6 +1913,8 @@ including ones more likely to generate false alarms.
 
 Return a list of (OFFSET . COMMENT) where COMMENT applies at OFFSET
 in RE-STRING."
+  (unless (memq purpose '(nil file))
+    (error "Bad xr-lint PURPOSE argument: %S" purpose))
   (unless (memq checks '(nil all))
     (error "Bad xr-lint CHECKS argument: %S" checks))
   (let ((warnings (list nil)))
