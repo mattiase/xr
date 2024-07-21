@@ -35,7 +35,7 @@
 (defun xr--report (warnings position message)
   "Add the report MESSAGE at POSITION to WARNINGS."
   (when warnings
-    (push (cons (1- position) message) (car warnings))))
+    (push (cons position message) (car warnings))))
 
 ;; House versions of `cl-some' and `cl-every', but faster.
 
@@ -53,49 +53,79 @@
        (setq list (cdr list)))
      (not list)))
 
+(defvar xr--string)
+(defvar xr--len)
+(defvar xr--idx)
+
+(defmacro xr--substring-p (string idx substring)
+  "Whether SUBSTRING is in STRING at IDX."
+  (let ((i (make-symbol "i"))
+        (sub (make-symbol "sub")))
+    `(let ((,i ,idx)
+           (,sub ,substring))
+       (eq (compare-strings ,string ,i (+ ,i (length ,sub)) ,sub nil nil)
+           t))))
+
+;; `string-search' added in Emacs 28
+(defalias 'xr--string-search
+  (if (fboundp 'string-search)
+      #'string-search
+    (lambda (needle haystack start-pos)
+      "Index of the string NEEDLE in the string HAYSTACK, or nil."
+      (string-match-p (regexp-quote needle) haystack start-pos))))
+
 (defun xr--parse-char-alt (negated warnings checks)
-  (let ((start-pos (point))
-        (intervals nil)
-        (classes nil)
-        ch)
-    (while (or (not (eq (setq ch (char-after)) ?\]))
-               (eq (point) start-pos))
+  (let* ((intervals nil)
+         (classes nil)
+         (start-pos xr--idx)
+         (string xr--string)
+         (len xr--len)
+         (idx start-pos)
+         ch)
+    (while (and (< idx len)
+                (or (not (eq (setq ch (aref string idx)) ?\]))
+                    (= idx start-pos)))
       (cond
-       ((not ch)
-        (error "Unterminated character alternative"))
        ;; character class
        ((and (eq ch ?\[)
-             (looking-at (rx "[:" (group (* (not (any ":")))) ":]")))
-        (let ((sym (intern (match-string 1))))
-          (unless (memq sym
-                        '(ascii alnum alpha blank cntrl digit graph
-                          lower multibyte nonascii print punct space
-                          unibyte upper word xdigit))
-            (error "No character class `%s'" (match-string 0)))
-          (if (memq sym classes)
-              (xr--report warnings (point)
-                          (format-message
-                           "Duplicated character class `[:%s:]'" sym))
-            (push sym classes))
-          (goto-char (match-end 0))))
+             (< (+ idx 3) len)
+             (eq (aref string (1+ idx)) ?:)
+             (let ((i (xr--string-search ":]" string (+ 2 idx))))
+               (and i
+                    (let ((sym (intern (substring string (+ idx 2) i))))
+                      (unless
+                          (memq sym
+                                '( ascii alnum alpha blank cntrl digit graph
+                                   lower multibyte nonascii print punct space
+                                   unibyte upper word xdigit))
+                        (error "No character class `[:%s:]'" (symbol-name sym)))
+                      (if (memq sym classes)
+                          (xr--report
+                           warnings idx
+                           (format-message
+                            "Duplicated character class `[:%s:]'" sym))
+                        (push sym classes))
+                      (setq idx (+ i 2))
+                      t)))))
        ;; character range
-       ((and (eq (char-after (1+ (point))) ?-)
-             (not (memq (char-after (+ (point) 2)) '(?\] nil))))
+       ((and (< (+ idx 3) len)
+             (eq (aref string (1+ idx)) ?-)
+             (not (memq (aref string (+ idx 2)) '(?\] nil))))
         (let ((start ch)
-              (end (char-after (+ (point) 2))))
+              (end (aref string (+ idx 2))))
           (cond
            ((<= start #x7f #x3fff80 end)
             ;; Intervals that go from ASCII (0-7f) to raw bytes
             ;; (3fff80-3fffff) always exclude the intervening (Unicode) points.
-            (push (vector start #x7f (point)) intervals)
-            (push (vector #x3fff80 end (point)) intervals))
+            (push (vector start #x7f idx) intervals)
+            (push (vector #x3fff80 end idx) intervals))
            ((<= start end)
-            (push (vector start end (point)) intervals))
+            (push (vector start end idx) intervals))
            ;; It's unlikely that anyone writes z-a by mistake; don't complain.
            ((and (eq start ?z) (eq end ?a)))
            (t
             (xr--report
-             warnings (point)
+             warnings idx
              (xr--escape-string
               (format-message "Reversed range `%c-%c' matches nothing"
                               start end)))))
@@ -103,7 +133,7 @@
            ;; Suppress warnings about ranges between adjacent digits,
            ;; like [0-1], as they are common and harmless.
            ((and (= end (1+ start)) (not (<= ?0 start end ?9)))
-            (xr--report warnings (point)
+            (xr--report warnings idx
                         (xr--escape-string
                          (format-message "Two-character range `%c-%c'"
                                          start end))))
@@ -111,7 +141,7 @@
            ;; although they are unlikely. Maybe it should be off by default?
            ((and (<= ?A start ?Z) (<= ?a end ?z))
             (xr--report
-             warnings (point)
+             warnings idx
              (format-message
               "Range `%c-%c' between upper and lower case includes symbols"
               start end)))
@@ -120,35 +150,45 @@
            ((and (eq checks 'all)
                  (or (eq start ?+) (eq end ?+)))
             (xr--report
-             warnings (point)
+             warnings idx
              (xr--escape-string
               (format-message
                "Suspect character range `%c-%c': should `-' be literal?"
                start end)))))
 
-          (forward-char 3)))
+          (setq idx (+ idx 3))))
        ;; single character (including ], ^ and -)
        (t
-        (when (and (eq ch ?\[)
-                   ;; Ad-hoc pattern attempting to catch mistakes
-                   ;; on the form [...[...]...]
-                   ;; where we are    ^here
-                   (looking-at (rx "["
-                                   (zero-or-more (not (any "[]")))
-                                   "]"
-                                   (zero-or-more (not (any "[]")))
-                                   (not (any "[\\"))
-                                   "]"))
-                   ;; Only if the alternative didn't start with ]
-                   (not (and intervals
-                             (eq (aref (car (last intervals)) 0) ?\]))))
-          (xr--report warnings (point)
+        (when (and
+               warnings
+               (eq ch ?\[)
+               ;; Ad-hoc pattern attempting to catch mistakes
+               ;; on the form [...[...]...]
+               ;; where we are    ^here
+               (let ((i (1+ idx)))
+                 (while (and (< i len)
+                             (not (memq (aref string i) '(?\[ ?\]))))
+                   (setq i (1+ i)))
+                 (and (< i len)
+                      (eq (aref string i) ?\])
+                      (let ((j (1+ i)))
+                        (while (and (< j len)
+                                    (not (memq (aref string j) '(?\[ ?\]))))
+                          (setq j (1+ j)))
+                        (and
+                         (< (+ i 1) j len)
+                         (not (memq (aref string (- j 1)) '(?\[ ?\\)))
+                         (eq (aref string j) ?\])))))
+               ;; Only if the alternative didn't start with ]
+               (not (and intervals
+                         (eq (aref (car (last intervals)) 0) ?\]))))
+          (xr--report warnings idx
                       (format-message "Suspect `[' in char alternative")))
         (when (and (eq ch ?-)
-                   (not (eq (char-after (1+ (point))) ?\]))
-                   (> (point) start-pos))
+                   (< start-pos idx (1- len))
+                   (not (eq (aref string (1+ idx)) ?\])))
           (xr--report
-           warnings (point)
+           warnings idx
            (format-message
             "Literal `-' not first or last in character alternative")))
         (when (eq checks 'all)
@@ -159,15 +199,21 @@
                                        ?s ?S ?d ?D ?w ?W))   ; PCRE sequences
                            (<= ?0 ch ?7))                    ; octal escapes
                        ;; Suppress some common false positives, eg [\\nrt]
-                       (not (looking-at-p (rx (= 2 (in "tnrfeb"))))))
+                       (not (and (memq ch '(?t ?n ?r ?f ?x ?e ?b))
+                                 (< (1+ idx) len)
+                                 (memq (aref string (1+ idx))
+                                       '(?t ?n ?r ?f ?x ?e ?b)))))
               (xr--report
-               warnings (- (point) 1)
+               warnings (- idx 1)
                (format-message
                 "Possibly erroneous `\\%c' in character alternative" ch)))))
-        (push (vector ch ch (point)) intervals)
-        (forward-char))))
+        (push (vector ch ch idx) intervals)
+        (setq idx (1+ idx)))))
 
-    (forward-char)                      ; eat the ]
+    (unless (< idx len)
+      (error "Unterminated character alternative"))
+
+    (setq xr--idx (1+ idx))             ; eat the ] and write back
 
     ;; Detect duplicates and overlapping intervals.
     (let* ((sorted
@@ -504,18 +550,17 @@ like (* (* X) ... (* X))."
 
 (defun xr--parse-seq (warnings purpose checks)
   (let ((sequence nil)                 ; reversed
+        (string xr--string)
+        (len xr--len)
+        (idx xr--idx)
         (at-end nil))
-    (while (not at-end)
-      (let ((item-start (point))
-            (next-char (char-after)))
+    (while (and (< idx len) (not at-end))
+      (let ((item-start idx)
+            (next-char (aref string idx)))
         (cond
-         ;; end of string
-         ((eq next-char nil)
-          (setq at-end t))
-
          ;; ^ - only special at beginning of sequence
          ((eq next-char ?^)
-          (forward-char)
+          (setq idx (1+ idx))
           (if (null sequence)
               (progn
                 (when (eq purpose 'file)
@@ -528,8 +573,11 @@ like (* (* X) ... (* X))."
 
          ;; $ - only special at end of sequence
          ((eq next-char ?$)
-          (forward-char)
-          (if (looking-at (rx (or "\\|" "\\)" eos)))
+          (setq idx (1+ idx))
+          (if (or (>= idx len)
+                  (and (< (1+ idx) len)
+                       (eq (aref string idx) ?\\)
+                       (memq (aref string (1+ idx)) '(?| ?\)))))
               (progn
                 (when (eq purpose 'file)
                   (xr--report warnings item-start
@@ -542,10 +590,11 @@ like (* (* X) ... (* X))."
 
          ;; not-newline
          ((eq next-char ?.)
-          (forward-char)
+          (setq idx (1+ idx))
           ;; Assume that .* etc is intended.
           (when (and (eq purpose 'file)
-                     (not (memq (following-char) '(?? ?* ?+))))
+                     (not (and (< idx len)
+                               (memq (aref string idx) '(?? ?* ?+)))))
             (xr--report warnings item-start
                         (format-message
                          "Possibly unescaped `.' in file-matching regexp")))
@@ -553,19 +602,23 @@ like (* (* X) ... (* X))."
 
           ;; character alternative
          ((eq next-char ?\[)
-          (forward-char)
-          (let ((negated (eq (following-char) ?^)))
-            (when negated (forward-char))
-            (push (xr--parse-char-alt negated warnings checks) sequence)))
+          (setq idx (1+ idx))
+          (let ((negated (and (< idx len) (eq (aref string idx) ?^))))
+            (when negated (setq idx (1+ idx)))
+            ;; FIXME: ugly spill and fill around call
+            (setq xr--idx idx)
+            (push (xr--parse-char-alt negated warnings checks) sequence)
+            (setq idx xr--idx)))
 
          ;; * ? + (and non-greedy variants)
          ((memq next-char '(?* ?? ?+))
           ;; - not special at beginning of sequence or after ^ or \`
           (if (and sequence
                    (not (and (memq (car sequence) '(bol bos))
-                             (memq (preceding-char) '(?^ ?`)))))
+                             (memq (aref string (1- idx)) '(?^ ?`)))))
               (let ((operator-char next-char)
-                    (lazy (eq (char-after (1+ item-start)) ??))
+                    (lazy (and (< (1+ item-start) len)
+                               (eq (aref string (1+ item-start)) ??)))
                     (operand (car sequence)))
                 (when warnings
                   ;; Check both (OP (OP X)) and (OP (group (OP X))).
@@ -631,58 +684,79 @@ like (* (* X) ... (* X))."
                   (unless (eq operator-char ??)
                     (xr--check-wrap-around-repetition
                      operand item-start warnings)))
-                (forward-char (if lazy 2 1))
+                (setq idx (+ idx (if lazy 2 1)))
                 (setq sequence (cons (xr--postfix operator-char lazy operand)
                                      (cdr sequence))))
-            (forward-char)
+            (setq idx (1+ idx))
             (xr--report warnings item-start
                         (format-message "Unescaped literal `%c'" next-char))
             (push (char-to-string next-char) sequence)))
 
          ;; Anything starting with backslash
          ((eq next-char ?\\)
-          (forward-char)
-          (setq next-char (char-after))
+          (setq idx (1+ idx))
+          (unless (< idx len)
+            (error "Backslash at end of regexp"))
+          (setq next-char (aref string idx))
           (cond
            ;; end of sequence: \) or \|
            ((memq next-char '(?\) ?|))
-            (forward-char -1)           ; regurgitate the backslash
+            (setq idx (1- idx))         ; regurgitate the backslash
             (setq at-end t))
             
            ;; group
            ((eq next-char ?\()
-            (forward-char)
+            (setq idx (1+ idx))
             (let* ((submatch
-                    (if (eq (following-char) ??)
+                    (if (and (< idx len) (eq (aref string idx) ??))
                         (progn
-                          (forward-char)
-                          (cond
-                           ((eq (following-char) ?:)
-                            (forward-char)
-                            nil)
-                           ((looking-at (rx (group (in "1-9") (* digit)) ":"))
-                            (goto-char (match-end 0))
-                            (string-to-number (match-string 1)))
-                           (t (error "Invalid \\(? syntax"))))
+                          (setq idx (1+ idx))
+                          (unless (< idx len)
+                            (error "Invalid \\(? syntax"))
+                          (let ((c (aref string idx)))
+                            (cond
+                             ((eq c ?:)
+                              (setq idx (1+ idx))
+                              nil)
+                             ((and (<= ?1 c ?9)
+                                   (let ((i (1+ idx)))
+                                     (while
+                                         (and (< i len)
+                                              (<= ?0 (aref string i) ?9))
+                                       (setq i (1+ i)))
+                                     (and (< i len)
+                                          (eq (aref string i) ?:)
+                                          (prog1
+                                              (string-to-number
+                                               (substring string idx i))
+                                            (setq idx (1+ i)))))))
+                             (t (error "Invalid \\(? syntax")))))
                       (when (and (eq checks 'all)
-                                 (eq (following-char) ?:)
-                                 (eq (char-after (1+ (point))) ??)
+                                 (< (1+ idx) len)
+                                 (eq (aref string idx) ?:)
+                                 (eq (aref string (1+ idx)) ??)
                                  ;; suppress if the group ends after the :?
-                                 (not (looking-at-p (rx ":?\\)"))))
+                                 (not (xr--substring-p string (+ idx 2) "\\)")))
                         (xr--report
-                         warnings (point)
+                         warnings idx
                          (format-message
                           "Possibly mistyped `:?' at start of group")))
                       'unnumbered))
-                   (group (xr--parse-alt warnings purpose checks))
+                   (group (progn
+                            ;; FIXME: ugly spill and fill around call
+                            (setq xr--idx idx)
+                            (prog1
+                                (xr--parse-alt warnings purpose checks)
+                              (setq idx xr--idx))))
                    ;; simplify - group has an implicit seq
                    (operand (if (and (listp group) (eq (car group) 'seq))
                                 (cdr group)
                               (list group))))
-              (unless (and (eq (following-char) ?\\)
-                           (eq (char-after (1+ (point))) ?\)))
+              (unless (and (< (1+ idx) len)
+                           (eq (aref string idx) ?\\)
+                           (eq (aref string (1+ idx)) ?\)))
                 (error "Missing \\)"))
-              (forward-char 2)
+              (setq idx (+ 2 idx))
               (let ((item (cond ((eq submatch 'unnumbered)
                                  (cons 'group operand))
                                 (submatch
@@ -694,9 +768,9 @@ like (* (* X) ... (* X))."
            ((eq next-char ?\{)
             (if (and sequence
                      (not (and (memq (car sequence) '(bol bos))
-                               (memq (char-after (1- item-start)) '(?^ ?`)))))
+                               (memq (aref string (1- item-start)) '(?^ ?`)))))
                 (progn
-                  (forward-char)
+                  (setq idx (1+ idx))
                   (let ((operand (car sequence)))
                     (when warnings
                       (cond
@@ -732,34 +806,51 @@ like (* (* X) ... (* X))."
                         (xr--report
                          warnings item-start
                          "Repetition of expression matching an empty string"))))
-                    (if (looking-at (rx (opt (group (one-or-more digit)))
-                                        (opt (group ",")
-                                             (opt (group (one-or-more digit))))
-                                        "\\}"))
-                        (let ((lower (if (match-beginning 1)
-                                         (string-to-number (match-string 1))
-                                       0))
-                              (comma (match-string 2))
-                              (upper (and (match-beginning 3)
-                                          (string-to-number (match-string 3)))))
-                          (unless (or (match-beginning 1) (match-beginning 3))
-                            (xr--report warnings (- (match-beginning 0) 2)
-                                        (if comma
-                                            "Uncounted repetition"
-                                          "Implicit zero repetition")))
-                          (when (and warnings
-                                     (if comma
-                                         (or (not upper) (>= upper 2))
-                                       (>= lower 2)))
-                            (xr--check-wrap-around-repetition
-                             operand (match-beginning 0) warnings))
-                          (goto-char (match-end 0))
-                          (setq sequence (cons (xr--repeat
-                                                lower
-                                                (if comma upper lower)
-                                                operand)
-                                               (cdr sequence))))
-                      (error "Invalid \\{\\} syntax"))))
+                    ;; parse bounds
+                    (let* ((start idx)
+                           (i start))
+                      (while (and (< i len)
+                                  (<= ?0 (aref string i) ?9))
+                        (setq i (1+ i)))
+                      (let ((lower (and (> i start)
+                                        (string-to-number
+                                         (substring string start i))))
+                            (comma nil)
+                            (upper nil))
+                        (when (and (< i len)
+                                   (eq (aref string i) ?,))
+                          (setq comma t)
+                          (setq i (1+ i))
+                          (let ((start-u i))
+                            (while (and (< i len)
+                                        (<= ?0 (aref string i) ?9))
+                              (setq i (1+ i)))
+                            (setq upper
+                                  (and (> i start-u)
+                                       (string-to-number
+                                        (substring string start-u i))))))
+                        (setq idx i)
+                        (unless (xr--substring-p string idx "\\}")
+                          (error "Invalid \\{\\} syntax"))
+                        (unless (or lower upper)
+                          (xr--report warnings (- start 2)
+                                      (if comma
+                                          "Uncounted repetition"
+                                        "Implicit zero repetition")))
+                        (when (and warnings
+                                   (if comma
+                                       (or (not upper) (>= upper 2))
+                                     (and lower (>= lower 2))))
+                          (xr--check-wrap-around-repetition
+                           operand start warnings))
+                        (setq idx (+ i 2))
+                        (setq lower (or lower 0))
+                        (setq sequence (cons (xr--repeat
+                                              lower
+                                              (if comma upper lower)
+                                              operand)
+                                             (cdr sequence)))))))
+
               ;; Literal {
               (xr--report warnings item-start
                           (format-message
@@ -767,13 +858,13 @@ like (* (* X) ... (* X))."
 
            ;; back-reference
            ((memq next-char (eval-when-compile (number-sequence ?1 ?9)))
-            (forward-char)
+            (setq idx (1+ idx))
             (push (list 'backref (- next-char ?0))
                   sequence))
 
            ;; various simple substitutions
            ((memq next-char '(?w ?W ?` ?\' ?= ?b ?B ?< ?>))
-            (forward-char)
+            (setq idx (1+ idx))
             (let ((sym (cdr (assq
                              next-char
                              ;; Note that translating \w to wordchar isn't
@@ -791,42 +882,40 @@ like (* (* X) ... (* X))."
 
            ;; symbol-start, symbol-end
            ((eq next-char ?_)
-            (forward-char)
-            (let* ((c (following-char))
+            (setq idx (1+ idx))
+            (let* ((c (and (< idx len) (aref string idx)))
                    (sym (cond ((eq c ?<) 'symbol-start)
                               ((eq c ?>) 'symbol-end)
                               (t (error "Invalid \\_ sequence")))))
-              (forward-char)
+              (setq idx (1+ idx))
               (push sym sequence)))
 
            ;; character syntax
            ((memq next-char '(?s ?S))
-            (forward-char)
+            (setq idx (1+ idx))
+            (unless (< idx len)
+              (error "Incomplete \\%c sequence" next-char))
             (let* ((negated (eq next-char ?S))
-                   (syntax-code (char-after)))
-              (unless syntax-code
-                (error "Incomplete \\%c sequence" next-char))
-              (forward-char)
+                   (syntax-code (aref string idx)))
+              (setq idx (1+ idx))
               (push (xr--char-syntax negated syntax-code)
                     sequence)))
 
            ;; character categories
            ((memq next-char '(?c ?C))
-            (forward-char)
+            (setq idx (1+ idx))
+            (unless (< idx len)
+              (error "Incomplete \\%c sequence" next-char))
             (let ((negated (eq next-char ?C))
-                  (category-code (char-after)))
-              (unless category-code
-                (error "Incomplete \\%c sequence" next-char))
-              (forward-char)
+                  (category-code (aref string idx)))
+              (setq idx (1+ idx))
               (push (xr--char-category negated category-code)
                     sequence)))
 
-           ((eq next-char nil)
-            (error "Backslash at end of regexp"))
 
            ;; Escaped character. Only \*+?.^$[ really need escaping.
            (t
-            (forward-char)
+            (setq idx (1+ idx))
             (push (char-to-string next-char) sequence)
             (unless (memq next-char '(?\\ ?* ?+ ?? ?. ?^ ?$ ?\[ ?\]))
               ;; Note that we do not warn about \], since the symmetry with \[
@@ -838,11 +927,15 @@ like (* (* X) ... (* X))."
 
          ;; nonspecial character
          (t
-          (forward-char)
+          (setq idx (1+ idx))
           (push (char-to-string next-char) sequence)))
 
         (when (and (not at-end) warnings (cdr sequence)
-                   (not (looking-at (rx (or (any "?*+") "\\{")))))
+                   (not (or (and (< idx len)
+                                 (memq (aref string idx) '(?? ?* ?+)))
+                            (and (< (1+ idx) len)
+                                 (eq (aref string idx) ?\\)
+                                 (eq (aref string (1+ idx)) ?\{)))))
           (let* ((item (car sequence))
                  (prev-item (cadr sequence))
                  (subsumption (xr--adjacent-subsumption prev-item item)))
@@ -889,6 +982,7 @@ like (* (* X) ... (* X))."
             ;; and maintain location information.
             ))))
 
+    (setq xr--idx idx)
     (let ((item-seq (xr--rev-join-seq sequence)))
       (cond ((null item-seq)
              "")
@@ -1505,9 +1599,12 @@ A-SETS and B-SETS are arguments to `any'."
 (defun xr--parse-alt (warnings purpose checks)
   (let ((alternatives nil))             ; reversed
     (push (xr--parse-seq warnings purpose checks) alternatives)
-    (while (not (looking-at (rx (or "\\)" eos))))
-      (forward-char 2)                  ; skip \|
-      (let ((pos (point))
+    (while (not (or (>= xr--idx xr--len)
+                    (and (eq (aref xr--string xr--idx) ?\\)
+                         (< (1+ xr--idx) xr--len)
+                         (eq (aref xr--string (1+ xr--idx)) ?\)))))
+      (setq xr--idx (+ xr--idx 2))      ; skip \|
+      (let ((pos xr--idx)
             (seq (xr--parse-seq warnings purpose checks)))
         (when warnings
           (cond
@@ -1537,127 +1634,154 @@ A-SETS and B-SETS are arguments to `any'."
       (car alternatives))))
 
 (defun xr--parse (re-string warnings purpose checks)
-  (with-temp-buffer
-    (insert re-string)
-    (goto-char (point-min))
-    (let* ((case-fold-search nil)
-           (rx (xr--parse-alt warnings purpose checks)))
-      (when (looking-at (rx "\\)"))
-        (error "Unbalanced \\)"))
-      rx)))
+  (let* ((s (string-to-multibyte re-string))
+         (xr--string s)
+         (xr--len (length s))
+         (xr--idx 0)
+         (rx (xr--parse-alt warnings purpose checks)))
+    (when (xr--substring-p s xr--idx "\\)")
+      (error "Unbalanced \\)"))
+    rx))
 
 ;; Grammar for skip-set strings:
 ;;
-;; skip-set ::= `^'? item* dangling?
+;; skip-set ::= negated? item* dangling?
 ;; item     ::= range | single
 ;; range    ::= single `-' endpoint
 ;; single   ::= {any char but `\'}
 ;;            | `\' {any char}
 ;; endpoint ::= single | `\'
 ;; dangling ::= `\'
+;; negated  ::= `^'
 ;;
 ;; Ambiguities in the above are resolved greedily left-to-right.
 
-(defun xr--parse-skip-set-buffer (warnings)
+(defun xr--parse-skip-set (string warnings)
 
   ;; An ad-hoc check, but one that catches lots of mistakes.
-  (when (and (looking-at (rx "[" (one-or-more anything) "]"
-                             (opt (any "+" "*" "?")
-                                  (opt "?"))
-                             eos))
-             (not (looking-at (rx "[:" (one-or-more anything) ":]" eos))))
-    (xr--report warnings (point)
+  (when (and (string-match-p (rx bos "[" (one-or-more anything) "]"
+                                 (opt (any "+" "*" "?")
+                                      (opt "?"))
+                                 eos)
+                             string)
+             (not (string-match-p
+                   (rx bos "[:" (one-or-more anything) ":]" eos)
+                   string)))
+    (xr--report warnings 0
                 (format-message "Suspect skip set framed in `[...]'")))
 
-  (let ((negated (eq (following-char) ?^))
-        (start-pos (point))
-        (intervals nil)
-        (classes nil))
+  (let* ((intervals nil)
+         (classes nil)
+         (escaped nil)
+         (len (length string))
+         (negated (and (> len 0) (eq (aref string 0) ?^)))
+         (idx 0)
+         (start-pos 0))
     (when negated
-      (forward-char)
-      (setq start-pos (point)))
-    (while (not (eobp))
-      (cond
-       ((looking-at (rx "[:" (group (*? anything)) ":]"))
-        (let ((sym (intern (match-string 1))))
-          (unless (memq sym
-                        '(ascii alnum alpha blank cntrl digit graph
-                                lower multibyte nonascii print punct space
-                                unibyte upper word xdigit))
-            (error "No character class `%s'" (match-string 0)))
-          ;; Another useful ad-hoc check.
-          (when (and (eq (char-before) ?\[)
-                     (eq (char-after (match-end 0)) ?\]))
-            (xr--report warnings (1- (point))
-                        (format-message
-                         "Suspect character class framed in `[...]'")))
-          (when (memq sym classes)
-            (xr--report warnings (point)
-                        (format-message "Duplicated character class `%s'"
-                                        (match-string 0))))
-          (push sym classes)))
+      (setq idx (1+ idx))
+      (setq start-pos idx))
+    (while (< idx len)
+      (let ((ch (aref string idx)))
+        (cond
+         ((and
+           (eq ch ?\[)
+           (not escaped)
+           (< (1+ idx) len)
+           (eq (aref string (1+ idx)) ?:)
+           (let ((i (xr--string-search ":]" string (+ 2 idx))))
+             (and i
+                  (let ((sym (intern (substring string (+ idx 2) i))))
+                    (unless
+                        (memq sym
+                              '( ascii alnum alpha blank cntrl digit graph
+                                 lower multibyte nonascii print punct space
+                                 unibyte upper word xdigit))
+                      (error "No character class `%s'" (symbol-name sym)))
+                    ;; Another useful ad-hoc check.
+                    (when (and (> idx 0)
+                               (eq (aref string (1- idx)) ?\[)
+                               (< (+ i 2) len)
+                               (eq (aref string (+ i 2)) ?\]))
+                      (xr--report
+                       warnings (1- idx)
+                       (format-message
+                        "Suspect character class framed in `[...]'")))
+                    (when (memq sym classes)
+                      (xr--report warnings idx
+                                  (format-message
+                                   "Duplicated character class `[:%s:]'" sym)))
+                    (push sym classes)
+                    (setq idx (+ 2 i))
+                    t)))))
 
-       ((looking-at (rx (or (seq "\\" (group anything))
-                            (group (not (any "\\"))))
-                        (opt "-"
-                             (or (seq "\\" (group anything))
-                                 (group anything)))))
-        (let ((start (string-to-char (or (match-string 1)
-                                         (match-string 2))))
-              (end (or (and (match-beginning 3)
-                            (string-to-char (match-string 3)))
-                       (and (match-beginning 4)
-                            (string-to-char (match-string 4))))))
-          (when (and (match-beginning 1)
-                     (not (memq start '(?^ ?- ?\\))))
-            (xr--report warnings (point)
-                        (xr--escape-string
-                         (format-message "Unnecessarily escaped `%c'" start))))
-          (when (and (match-beginning 3)
-                     (not (memq end '(?^ ?- ?\\))))
-            (xr--report warnings (1- (match-beginning 3))
-                        (xr--escape-string
-                         (format-message "Unnecessarily escaped `%c'" end))))
-          (when (and (eq start ?-)
-                     (not end)
-                     (match-beginning 2)
-                     (< start-pos (point) (1- (point-max))))
-            (xr--report warnings (point)
-                        (format-message "Literal `-' not first or last")))
-          (if (and end (> start end))
-              (xr--report warnings (point)
-                          (xr--escape-string
-                           (format-message "Reversed range `%c-%c'" start end)))
-            (cond
-             ((eq start end)
-              (xr--report warnings (point)
-                          (xr--escape-string
-                           (format-message "Single-element range `%c-%c'"
-                                           start end))))
-             ((eq (1+ start) end)
-              (xr--report warnings (point)
-                          (xr--escape-string
-                           (format-message "Two-element range `%c-%c'"
-                                           start end)))))
-          (cond
-           ((not end)
-            (push (vector start start (point)) intervals))
-           ((<= start #x7f #x3fff80 end)
-            ;; Intervals that go from ASCII (0-7f) to raw bytes
-            ;; (3fff80-3fffff) always exclude the intervening (Unicode) points.
-            (push (vector start #x7f (point)) intervals)
-            (push (vector #x3fff80 end (point)) intervals))
-           (t
-            (push (vector start end (point)) intervals))))))
+         ((and (eq ch ?\\) (not escaped))
+          (setq idx (1+ idx))
+          (if (= idx len)
+              (xr--report warnings (1- idx)
+                          (format-message "Stray `\\' at end of string"))
+            (setq escaped t)))
 
-       ((looking-at (rx "\\" eos))
-        (xr--report warnings (point)
-                    (format-message "Stray `\\' at end of string"))))
+         (t 
+          (let ((pos (if escaped (1- idx) idx))
+                (start ch)
+                (end nil))
+            (when (and escaped (not (memq start '(?^ ?- ?\\))))
+              (xr--report warnings pos
+                          (xr--escape-string
+                           (format-message
+                            "Unnecessarily escaped `%c'" start))))
 
-      (goto-char (match-end 0)))
+            (setq idx (1+ idx))
+            (when (and (< (1+ idx) len) (eq (aref string idx) ?-))
+              (setq idx (1+ idx))
+              (setq end (aref string idx))
+              (setq idx (1+ idx))
+              (when (and (eq end ?\\) (< idx len))
+                (setq end (aref string idx))
+                (setq idx (1+ idx))
+                (when (not (memq end '(?^ ?- ?\\)))
+                  (xr--report warnings (- idx 2)
+                              (xr--escape-string
+                               (format-message
+                                "Unnecessarily escaped `%c'" end))))))
+
+            (when (and (eq start ?-)
+                       (not end)
+                       (not escaped)
+                       (< start-pos pos (1- len)))
+              (xr--report warnings pos
+                          (format-message "Literal `-' not first or last")))
+            (if (and end (> start end))
+                (xr--report warnings pos
+                            (xr--escape-string
+                             (format-message
+                              "Reversed range `%c-%c'" start end)))
+              (cond
+               ((eq start end)
+                (xr--report warnings pos
+                            (xr--escape-string
+                             (format-message "Single-element range `%c-%c'"
+                                             start end))))
+               ((eq (1+ start) end)
+                (xr--report warnings pos
+                            (xr--escape-string
+                             (format-message "Two-element range `%c-%c'"
+                                             start end)))))
+              (cond
+               ((not end)
+                (push (vector start start pos) intervals))
+               ((<= start #x7f #x3fff80 end)
+                ;; Intervals that go from ASCII (0-7f) to raw bytes
+                ;; (3fff80-3fffff) always exclude the intervening
+                ;; (Unicode) points.
+                (push (vector start #x7f pos) intervals)
+                (push (vector #x3fff80 end pos) intervals))
+               (t
+                (push (vector start end pos) intervals))))
+            (setq escaped nil))))))
 
     (when (and (null intervals) (null classes))
-      (xr--report warnings (point-min)
+      (xr--report warnings 0
                   (if negated
                       "Negated empty set matches anything"
                     "Empty set matches nothing")))
@@ -1750,13 +1874,6 @@ A-SETS and B-SETS are arguments to `any'."
                 (list 'not set)
               set))))))))
 
-(defun xr--parse-skip-set (skip-string warnings)
-  (with-temp-buffer
-    (set-buffer-multibyte t)
-    (insert skip-string)
-    (goto-char (point-min))
-    (xr--parse-skip-set-buffer warnings)))
-
 (defun xr--substitute-keywords (head-alist body-alist rx)
   "Substitute keywords in RX using HEAD-ALIST and BODY-ALIST in the
 head and body positions, respectively."
@@ -1826,7 +1943,9 @@ a character class on `rx' form.
 If desired, `rx' can then be used to convert the result to an
 ordinary regexp.
 See `xr' for a description of the DIALECT argument."
-  (xr--in-dialect (xr--parse-skip-set skip-set-string nil) dialect))
+  (xr--in-dialect (xr--parse-skip-set
+                   (string-to-multibyte skip-set-string) nil)
+                  dialect))
 
 ;;;###autoload
 (defun xr-lint (re-string &optional purpose checks)
@@ -1894,6 +2013,7 @@ If ESCAPE-PRINTABLE, also escape \\ and \", otherwise don't."
         xdigit)))
    string 'fixedcase 'literal))
 
+;; `take' added in Emacs 29
 (defalias 'xr--take
   (if (fboundp 'take)
       #'take

@@ -462,6 +462,8 @@
                    '((4 . "Suspect `[' in char alternative"))))
     (should (equal (xr-lint "[^][-].]")
                    nil))
+    (should (equal (xr-lint "\\[\\([^\\[]*\\)\\]$")
+                   nil))
     (should (equal (xr-lint "[0-1]")
                    nil))
     (should (equal (xr-lint "[^]-][]-^]")
