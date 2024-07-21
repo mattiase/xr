@@ -1,0 +1,104 @@
+                          xr version history
+                          ==================
+
+Version 1.25
+- Effective repetition of repetition check now always enabled
+- Some performance improvements
+
+Version 1.24
+- \w and \W are now translated to (syntax word) and (not (syntax word)),
+  instead of [[:word:]] and [^[:word:]] which are not exact equivalents.
+- Repetition operators are now literals after \`. For example,
+  \`* is now (seq bos "*"), not (* bos), because this is how Emacs works.
+- New lint check: find [A-z] (range between upper and lower case)
+- New `checks' argument to xr-lint, used to enable these new checks:
+  - Detect [+-X] and [X-+] (range to/from '+')
+  - Detect [\\t] etc (escape sequences in character alternative)
+  - Detect \(:?...\), as a possible typo for \(?:...\)
+  - Detect a\|b that could be [ab] which is more efficient
+  - Detect effective repetition of repetition such as \(A+B*\)*
+
+Version 1.23
+- Represent explicitly the gap in ranges from ASCII to raw bytes:
+  "[A-\xbb]" becomes (any "A-\x7f\x80-\xbb") because that is how
+  Emacs regexps work. This also suppresses some false positives
+  in `xr-lint' and `xr-skip-set-lint'.
+
+Version 1.22
+- More compact distribution
+
+Version 1.21
+- Suppress false complaint about (? (+ X))
+
+Version 1.20
+- Fix duplication removal in character alternatives, like [aaa]
+- All diagnostics are now described in the README file
+- Improved anchor conflict checks
+
+Version 1.19
+- Added filename-specific checks; new PURPOSE argument to `xr-lint'
+- Warn about wrapped subsumption, like \(A*C[AB]*\)+
+- Improved scope and accuracy of all subsumption checks
+- Warn about anchors in conflict with other expressions, like \(A$\)B
+
+Version 1.18
+- Fix test broken in Emacs 26
+
+Version 1.17
+- Performance improvements
+
+Version 1.16
+- Translate [^\n] into nonl
+- Better character class subset/superset analysis
+- More accurate repetition subsumption check
+- Use text quoting for messages
+
+Version 1.15
+- Warn about subsuming repetitions in sequence, like [AB]+A*
+
+Version 1.14
+- Warn about repetition of grouped repetition
+
+Version 1.13
+- More robust pretty-printing, especially for characters
+- Generate (category CHAR) for unknown categories
+
+Version 1.12
+- Warn about branch subsumption, like [AB]\|A
+
+Version 1.11
+- Warn about repetition of empty-matching expressions
+- Detect `-' not first or last in char alternatives or skip-sets
+- Stronger ad-hoc [...] check in skip-sets
+
+Version 1.10
+- Warn about [[:class:]] in skip-sets
+- Warn about two-character ranges like [*-+] in regexps
+
+Version 1.9
+- Don't complain about [z-a] and [^z-a] specifically
+- Improved skip set checks
+
+Version 1.8
+- Improved skip set checks
+
+Version 1.7
+- Parse skip-sets, adding `xr-skip-set', `xr-skip-set-pp' and
+  `xr-skip-set-lint'
+- Ad-hoc check for misplaced `]' in regexps
+
+Version 1.6
+- Detect duplicated branches like A\|A
+
+Version 1.5
+- Add dialect option to `xr' and `xr-pp'
+- Negative empty sets, [^z-a], now become `anything'
+
+Version 1.4
+- Detect overlap in character alternatives
+
+Version 1.3
+- Improved xr-lint warnings
+
+Version 1.2
+- `xr-lint' added
