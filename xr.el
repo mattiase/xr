@@ -37,14 +37,11 @@
   (when warnings
     (push (cons position message) (car warnings))))
 
-(define-error 'xr--parse-error "xr parsing error")
+(define-error 'xr-parse-error "xr parsing error")
 
 (defun xr--error (position message &rest args)
   "Format MESSAGE with ARGS at POSITION as an error and abort the parse."
-  (signal 'xr--parse-error
-          ;; FIXME: More natural to have the position first; this is
-          ;; for compatibility. We want it to be part of the diagnostics
-          ;; anyway.
+  (signal 'xr-parse-error
           (list (apply #'format-message message args) position)))
 
 ;; House versions of `cl-some' and `cl-every', but faster.
@@ -1939,6 +1936,17 @@ The alists are mapping from the default choice.")
         (xr--substitute-keywords (cadr keywords) (cddr keywords) rx)
       rx)))
   
+(defmacro xr--error-to-warnings (warnings form)
+  "Run FORM, converting parse errors to warnings."
+  `(condition-case err
+       ,form
+     (xr-parse-error
+      ;; Add the error to the diagnostics.
+      (let ((msg (nth 1 err))
+            (pos (nth 2 err)))
+        ;; FIXME: add a severity field (error/warning/info) instead
+        (xr--report ,warnings pos (concat "error: " msg))))))
+
 ;;;###autoload
 (defun xr (re-string &optional dialect)
   "Convert a regexp string to rx notation; the inverse of `rx'.
@@ -1984,7 +1992,8 @@ in RE-STRING."
   (unless (memq checks '(nil all))
     (error "Bad xr-lint CHECKS argument: %S" checks))
   (let ((warnings (list nil)))
-    (xr--parse re-string warnings purpose checks)
+    (xr--error-to-warnings
+     warnings (xr--parse re-string warnings purpose checks))
     (sort (car warnings) #'car-less-than-car)))
 
 ;;;###autoload
@@ -1997,7 +2006,8 @@ The argument is interpreted according to the syntax of
 Return a list of (OFFSET . COMMENT) where COMMENT applies at OFFSET
 in SKIP-SET-STRING."
   (let ((warnings (list nil)))
-    (xr--parse-skip-set skip-set-string warnings)
+    (xr--error-to-warnings
+     warnings (xr--parse-skip-set skip-set-string warnings))
     (sort (car warnings) #'car-less-than-car)))
 
 (defun xr--escape-string (string &optional escape-printable)
