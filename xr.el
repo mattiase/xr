@@ -37,6 +37,16 @@
   (when warnings
     (push (cons position message) (car warnings))))
 
+(define-error 'xr--parse-error "xr parsing error")
+
+(defun xr--error (position message &rest args)
+  "Format MESSAGE with ARGS at POSITION as an error and abort the parse."
+  (signal 'xr--parse-error
+          ;; FIXME: More natural to have the position first; this is
+          ;; for compatibility. We want it to be part of the diagnostics
+          ;; anyway.
+          (list (apply #'format-message message args) position)))
+
 ;; House versions of `cl-some' and `cl-every', but faster.
 
 (defmacro xr--some (pred list)
@@ -98,7 +108,9 @@
                                 '( ascii alnum alpha blank cntrl digit graph
                                    lower multibyte nonascii print punct space
                                    unibyte upper word xdigit))
-                        (error "No character class `[:%s:]'" (symbol-name sym)))
+                        (xr--error idx
+                                   "No character class `[:%s:]'"
+                                   (symbol-name sym)))
                       (if (memq sym classes)
                           (xr--report
                            warnings idx
@@ -211,7 +223,8 @@
         (setq idx (1+ idx)))))
 
     (unless (< idx len)
-      (error "Unterminated character alternative"))
+      (xr--error (- start-pos (if negated 2 1))
+                 "Unterminated character alternative"))
 
     (setq xr--idx (1+ idx))             ; eat the ] and write back
 
@@ -400,30 +413,24 @@ adjacent strings. SEQUENCE is used destructively."
          (item (list 'category (if sym (cdr sym) category-code))))
     (if negated (list 'not item) item)))
 
-(defun xr--char-syntax (negated syntax-code)
-  (let ((sym (assq syntax-code
-                   '((?-  . whitespace)
-                     (?\s . whitespace)
-                     (?.  . punctuation)
-                     (?w  . word)
-                     (?W  . word)       ; undocumented
-                     (?_  . symbol)
-                     (?\( . open-parenthesis)
-                     (?\) . close-parenthesis)
-                     (?'  . expression-prefix)
-                     (?\" . string-quote)
-                     (?$  . paired-delimiter)
-                     (?\\ . escape)
-                     (?/  . character-quote)
-                     (?<  . comment-start)
-                     (?>  . comment-end)
-                     (?|  . string-delimiter)
-                     (?!  . comment-delimiter)))))
-    (when (not sym)
-      (error "Unknown syntax code `%s'"
-             (xr--escape-string (char-to-string syntax-code))))
-    (let ((item (list 'syntax (cdr sym))))
-      (if negated (list 'not item) item))))
+(defconst xr--char-syntax-alist
+  '((?-  . whitespace)
+    (?\s . whitespace)
+    (?.  . punctuation)
+    (?w  . word)
+    (?W  . word)       ; undocumented
+    (?_  . symbol)
+    (?\( . open-parenthesis)
+    (?\) . close-parenthesis)
+    (?'  . expression-prefix)
+    (?\" . string-quote)
+    (?$  . paired-delimiter)
+    (?\\ . escape)
+    (?/  . character-quote)
+    (?<  . comment-start)
+    (?>  . comment-end)
+    (?|  . string-delimiter)
+    (?!  . comment-delimiter)))
 
 (defun xr--postfix (operator-char lazy operand)
   ;; We use verbose names for the common *, + and ? operators for readability
@@ -447,8 +454,6 @@ adjacent strings. SEQUENCE is used destructively."
 (defun xr--repeat (lower upper operand)
   "Apply a repetition of {LOWER,UPPER} to OPERAND.
 UPPER may be nil, meaning infinity."
-  (when (and upper (> lower upper))
-    (error "Invalid repetition interval"))
   ;; rx does not accept (= 0 ...) or (>= 0 ...), so we use 
   ;; (repeat 0 0 ...) and (zero-or-more ...), respectively.
   ;; Note that we cannot just delete the operand if LOWER=UPPER=0,
@@ -696,7 +701,7 @@ like (* (* X) ... (* X))."
          ((eq next-char ?\\)
           (setq idx (1+ idx))
           (unless (< idx len)
-            (error "Backslash at end of regexp"))
+            (xr--error (1- len) "Backslash at end of regexp"))
           (setq next-char (aref string idx))
           (cond
            ;; end of sequence: \) or \|
@@ -707,12 +712,13 @@ like (* (* X) ... (* X))."
            ;; group
            ((eq next-char ?\()
             (setq idx (1+ idx))
-            (let* ((submatch
+            (let* ((group-start idx)
+                   (submatch
                     (if (and (< idx len) (eq (aref string idx) ??))
                         (progn
                           (setq idx (1+ idx))
                           (unless (< idx len)
-                            (error "Invalid \\(? syntax"))
+                            (xr--error (- idx 3) "Invalid \\(? syntax"))
                           (let ((c (aref string idx)))
                             (cond
                              ((eq c ?:)
@@ -730,7 +736,7 @@ like (* (* X) ... (* X))."
                                               (string-to-number
                                                (substring string idx i))
                                             (setq idx (1+ i)))))))
-                             (t (error "Invalid \\(? syntax")))))
+                             (t (xr--error (- idx 3) "Invalid \\(? syntax")))))
                       (when (and (eq checks 'all)
                                  (< (1+ idx) len)
                                  (eq (aref string idx) ?:)
@@ -755,7 +761,7 @@ like (* (* X) ... (* X))."
               (unless (and (< (1+ idx) len)
                            (eq (aref string idx) ?\\)
                            (eq (aref string (1+ idx)) ?\)))
-                (error "Missing \\)"))
+                (xr--error (- group-start 2) "Missing \\)"))
               (setq idx (+ 2 idx))
               (let ((item (cond ((eq submatch 'unnumbered)
                                  (cons 'group operand))
@@ -831,7 +837,7 @@ like (* (* X) ... (* X))."
                                         (substring string start-u i))))))
                         (setq idx i)
                         (unless (xr--substring-p string idx "\\}")
-                          (error "Invalid \\{\\} syntax"))
+                          (xr--error idx "Expected \\}"))
                         (unless (or lower upper)
                           (xr--report warnings (- start 2)
                                       (if comma
@@ -845,10 +851,12 @@ like (* (* X) ... (* X))."
                            operand start warnings))
                         (setq idx (+ i 2))
                         (setq lower (or lower 0))
-                        (setq sequence (cons (xr--repeat
-                                              lower
-                                              (if comma upper lower)
-                                              operand)
+
+                        (unless comma
+                          (setq upper lower))
+                        (when (and upper (> lower upper))
+                          (xr--error start "Invalid repetition interval"))
+                        (setq sequence (cons (xr--repeat lower upper operand)
                                              (cdr sequence)))))))
 
               ;; Literal {
@@ -886,7 +894,8 @@ like (* (* X) ... (* X))."
             (let* ((c (and (< idx len) (aref string idx)))
                    (sym (cond ((eq c ?<) 'symbol-start)
                               ((eq c ?>) 'symbol-end)
-                              (t (error "Invalid \\_ sequence")))))
+                              (t
+                               (xr--error (- idx 2) "Invalid \\_ sequence")))))
               (setq idx (1+ idx))
               (push sym sequence)))
 
@@ -894,18 +903,25 @@ like (* (* X) ... (* X))."
            ((memq next-char '(?s ?S))
             (setq idx (1+ idx))
             (unless (< idx len)
-              (error "Incomplete \\%c sequence" next-char))
+              (xr--error (- idx 2) "Incomplete \\%c sequence" next-char))
             (let* ((negated (eq next-char ?S))
                    (syntax-code (aref string idx)))
               (setq idx (1+ idx))
-              (push (xr--char-syntax negated syntax-code)
-                    sequence)))
+              (let ((sym (assq syntax-code xr--char-syntax-alist)))
+                (unless sym
+                  (xr--error (- idx 1)
+                             "Unknown syntax code `%s'"
+                             (xr--escape-string
+                              (char-to-string syntax-code))))
+                (push (let ((item (list 'syntax (cdr sym))))
+                        (if negated (list 'not item) item))
+                      sequence))))
 
            ;; character categories
            ((memq next-char '(?c ?C))
             (setq idx (1+ idx))
             (unless (< idx len)
-              (error "Incomplete \\%c sequence" next-char))
+              (xr--error (- idx 2) "Incomplete \\%c sequence" next-char))
             (let ((negated (eq next-char ?C))
                   (category-code (aref string idx)))
               (setq idx (1+ idx))
@@ -1640,7 +1656,7 @@ A-SETS and B-SETS are arguments to `any'."
          (xr--idx 0)
          (rx (xr--parse-alt warnings purpose checks)))
     (when (xr--substring-p s xr--idx "\\)")
-      (error "Unbalanced \\)"))
+      (xr--error xr--idx "Unbalanced \\)"))
     rx))
 
 ;; Grammar for skip-set strings:
@@ -1696,7 +1712,8 @@ A-SETS and B-SETS are arguments to `any'."
                               '( ascii alnum alpha blank cntrl digit graph
                                  lower multibyte nonascii print punct space
                                  unibyte upper word xdigit))
-                      (error "No character class `%s'" (symbol-name sym)))
+                      (xr--error idx
+                                 "No character class `%s'" (symbol-name sym)))
                     ;; Another useful ad-hoc check.
                     (when (and (> idx 0)
                                (eq (aref string (1- idx)) ?\[)
