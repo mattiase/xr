@@ -98,8 +98,7 @@
              warnings (point)
              (xr--escape-string
               (format-message "Reversed range `%c-%c' matches nothing"
-                              start end)
-              nil))))
+                              start end)))))
           (cond
            ;; Suppress warnings about ranges between adjacent digits,
            ;; like [0-1], as they are common and harmless.
@@ -107,8 +106,7 @@
             (xr--report warnings (point)
                         (xr--escape-string
                          (format-message "Two-character range `%c-%c'"
-                                         start end)
-                         nil)))
+                                         start end))))
            ;; This warning is not necessarily free of false positives,
            ;; although they are unlikely. Maybe it should be off by default?
            ((and (<= ?A start ?Z) (<= ?a end ?z))
@@ -126,8 +124,7 @@
              (xr--escape-string
               (format-message
                "Suspect character range `%c-%c': should `-' be literal?"
-               start end)
-              nil))))
+               start end)))))
 
           (forward-char 3)))
        ;; single character (including ], ^ and -)
@@ -215,7 +212,7 @@
                                          (aref this 0) this-end
                                          (aref next 0) (aref next 1)))))))
                 (xr--report warnings (max (aref this 2) (aref next 2))
-                            (xr--escape-string message nil))
+                            (xr--escape-string message))
                 (setcdr s (cddr s)))
             ;; No overlap.
             (setq s (cdr s)))))
@@ -363,7 +360,7 @@ adjacent strings. SEQUENCE is used destructively."
                      (?!  . comment-delimiter)))))
     (when (not sym)
       (error "Unknown syntax code `%s'"
-             (xr--escape-string (char-to-string syntax-code) nil)))
+             (xr--escape-string (char-to-string syntax-code))))
     (let ((item (list 'syntax (cdr sym))))
       (if negated (list 'not item) item))))
 
@@ -822,7 +819,7 @@ like (* (* X) ... (* X))."
               (xr--report warnings item-start
                           (format-message "Escaped non-special character `%s'"
                                           (xr--escape-string
-                                           (char-to-string next-char) nil)))))))
+                                           (char-to-string next-char))))))))
 
          ;; nonspecial character
          (t
@@ -1596,14 +1593,12 @@ A-SETS and B-SETS are arguments to `any'."
                      (not (memq start '(?^ ?- ?\\))))
             (xr--report warnings (point)
                         (xr--escape-string
-                         (format-message "Unnecessarily escaped `%c'" start)
-                         nil)))
+                         (format-message "Unnecessarily escaped `%c'" start))))
           (when (and (match-beginning 3)
                      (not (memq end '(?^ ?- ?\\))))
             (xr--report warnings (1- (match-beginning 3))
                         (xr--escape-string
-                         (format-message "Unnecessarily escaped `%c'" end)
-                         nil)))
+                         (format-message "Unnecessarily escaped `%c'" end))))
           (when (and (eq start ?-)
                      (not end)
                      (match-beginning 2)
@@ -1613,21 +1608,18 @@ A-SETS and B-SETS are arguments to `any'."
           (if (and end (> start end))
               (xr--report warnings (point)
                           (xr--escape-string
-                           (format-message "Reversed range `%c-%c'" start end)
-                           nil))
+                           (format-message "Reversed range `%c-%c'" start end)))
             (cond
              ((eq start end)
               (xr--report warnings (point)
                           (xr--escape-string
                            (format-message "Single-element range `%c-%c'"
-                                           start end)
-                           nil)))
+                                           start end))))
              ((eq (1+ start) end)
               (xr--report warnings (point)
                           (xr--escape-string
                            (format-message "Two-element range `%c-%c'"
-                                           start end)
-                           nil))))
+                                           start end)))))
           (cond
            ((not end)
             (push (vector start start (point)) intervals))
@@ -1692,7 +1684,7 @@ A-SETS and B-SETS are arguments to `any'."
                                          (aref this 0) this-end
                                          (aref next 0) (aref next 1)))))))
                 (xr--report warnings (max (aref this 2) (aref next 2))
-                            (xr--escape-string message nil))
+                            (xr--escape-string message))
                 (setcdr s (cddr s)))
             ;; No overlap.
             (setq s (cdr s)))))
@@ -1853,7 +1845,7 @@ in SKIP-SET-STRING."
     (xr--parse-skip-set skip-set-string warnings)
     (sort (car warnings) #'car-less-than-car)))
 
-(defun xr--escape-string (string escape-printable)
+(defun xr--escape-string (string &optional escape-printable)
   "Escape non-printing characters in a string for maximum readability.
 If ESCAPE-PRINTABLE, also escape \\ and \", otherwise don't."
   (replace-regexp-in-string
