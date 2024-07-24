@@ -277,19 +277,34 @@
 (defun xr--rev-join-seq (sequence)
   "Reverse SEQUENCE, flatten any (seq ...) inside, and concatenate
 adjacent strings. SEQUENCE is used destructively."
-  (let ((result nil))
+  (let ((strings nil)
+        (result nil))
     (while sequence
       (let ((elem (car sequence))
             (rest (cdr sequence)))
-        (cond ((and (consp elem) (eq (car elem) 'seq))
-               (setq sequence (nconc (nreverse (cdr elem)) rest)))
-              ((and (stringp elem) (stringp (car result)))
-               (setq result (cons (concat elem (car result)) (cdr result)))
-               (setq sequence rest))
-              (t
-               (setq result (cons elem result))
-               (setq sequence rest)))))
-    result))
+        (setq sequence
+              (cond ((stringp elem)
+                     (push elem strings)
+                     rest)
+                    ((eq (car-safe elem) 'seq)
+                     (nconc (nreverse (cdr elem)) rest))
+                    (strings
+                     (push (if (cdr strings)
+                               (mapconcat #'identity strings nil)
+                             (car strings))
+                           result)
+                     (setq strings nil)
+                     (push elem result)
+                     rest)
+                    (t
+                     (push elem result)
+                     rest)))))
+    (if strings
+        (cons (if (cdr strings)
+                  (mapconcat #'identity strings nil)
+                (car strings))
+              result)
+      result)))
 
 (defun xr--char-category (negated category-code)
   (let* ((sym (assq category-code
