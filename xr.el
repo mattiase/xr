@@ -32,17 +32,25 @@
 (require 'rx)
 (require 'cl-lib)
 
-(defun xr--report (warnings position message)
-  "Add the report MESSAGE at POSITION to WARNINGS."
+(defun xr--report-2 (warnings beg end message)
+  "Add the report MESSAGE at BEG..END to WARNINGS.
+BEG and END are inclusive char indices.  END is nil if only start is known."
   (when warnings
-    (push (cons position message) (car warnings))))
+    (push (list beg end message) (car warnings))))
+
+(defun xr--report (warnings position message)
+  (xr--report-2 warnings position nil message))
 
 (define-error 'xr-parse-error "xr parsing error")
 
-(defun xr--error (position message &rest args)
-  "Format MESSAGE with ARGS at POSITION as an error and abort the parse."
+(defun xr--error-2 (beg end message &rest args)
+  "Format MESSAGE with ARGS at BEG..END as an error and abort the parse.
+END is nil if unknown."
   (signal 'xr-parse-error
-          (list (apply #'format-message message args) position)))
+          (list (apply #'format-message message args) beg end)))
+
+(defun xr--error (position message &rest args)
+  (apply #'xr--error-2 position nil message args))
 
 ;; House versions of `cl-some' and `cl-every', but faster.
 
@@ -1985,8 +1993,8 @@ If CHECKS is absent or nil, only perform checks that are very
 likely to indicate mistakes; if `all', include all checks,
 including ones more likely to generate false alarms.
 
-Return a list of (OFFSET . COMMENT) where COMMENT applies at OFFSET
-in RE-STRING."
+Return a list of (BEG END COMMENT) where COMMENT applies at offsets
+BEG..END inclusive in RE-STRING."
   (unless (memq purpose '(nil file))
     (error "Bad xr-lint PURPOSE argument: %S" purpose))
   (unless (memq checks '(nil all))
@@ -2003,8 +2011,8 @@ This includes uses of tolerated but discouraged constructs.
 Outright syntax violations are signalled as errors.
 The argument is interpreted according to the syntax of
 `skip-chars-forward' and `skip-chars-backward'.
-Return a list of (OFFSET . COMMENT) where COMMENT applies at OFFSET
-in SKIP-SET-STRING."
+Return a list of (BEG END COMMENT) where COMMENT applies at offsets
+BEG..END inclusive in SKIP-SET-STRING."
   (let ((warnings (list nil)))
     (xr--error-to-warnings
      warnings (xr--parse-skip-set skip-set-string warnings))
