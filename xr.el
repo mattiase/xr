@@ -32,15 +32,17 @@
 (require 'rx)
 (require 'cl-lib)
 
+(defun xr--add-diag (warnings beg end message severity)
+  (push (list beg end message severity) (car warnings)))
+
 (defun xr--warn (warnings beg end message)
   "Add the report MESSAGE at BEG..END to WARNINGS.
 BEG and END are inclusive char indices.  END is nil if only start is known."
   (when warnings
-    (push (list beg end message) (car warnings))))
+    (xr--add-diag warnings beg end message 'warning)))
 
 (defun xr--add-error (warnings beg end message)
-  ;; FIXME: add a severity field (error/warning/info) instead
-  (xr--warn warnings beg end (concat "error: " message)))
+  (xr--add-diag warnings beg end message 'error))
 
 (define-error 'xr-parse-error "xr parsing error")
 
@@ -2039,8 +2041,8 @@ If CHECKS is absent or nil, only perform checks that are very
 likely to indicate mistakes; if `all', include all checks,
 including ones more likely to generate false alarms.
 
-Return a list of (BEG END COMMENT) where COMMENT applies at offsets
-BEG..END inclusive in RE-STRING."
+Return a list of (BEG END COMMENT SEVERITY) where COMMENT applies at offsets
+BEG..END inclusive in RE-STRING, and SEVERITY is `warning' or `error'."
   (unless (memq purpose '(nil file))
     (error "Bad xr-lint PURPOSE argument: %S" purpose))
   (unless (memq checks '(nil all))
@@ -2058,7 +2060,7 @@ Outright syntax violations are signalled as errors.
 The argument is interpreted according to the syntax of
 `skip-chars-forward' and `skip-chars-backward'.
 Return a list of (BEG END COMMENT) where COMMENT applies at offsets
-BEG..END inclusive in SKIP-SET-STRING."
+BEG..END inclusive in SKIP-SET-STRING, and SEVERITY is `warning' or `error'."
   (let ((warnings (list nil)))
     (xr--error-to-warnings
      warnings (xr--parse-skip-set skip-set-string warnings))
