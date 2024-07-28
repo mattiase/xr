@@ -32,17 +32,27 @@
 (require 'rx)
 (require 'cl-lib)
 
-(defun xr--add-diag (warnings beg end message severity)
-  (push (list beg end message severity) (car warnings)))
+(defun xr--add-diag-group (warnings group)
+  (push group (car warnings)))
 
-(defun xr--warn (warnings beg end message)
-  "Add the report MESSAGE at BEG..END to WARNINGS.
-BEG and END are inclusive char indices.  END is nil if only start is known."
+(defun xr--warn (warnings beg end message &rest info)
+  "Add the warning MESSAGE at BEG..END to WARNINGS.
+BEG and END are inclusive char indices.  END is nil if only start is known.
+More BEG END MESSAGE argument triples for info-level messages can follow."
   (when warnings
-    (xr--add-diag warnings beg end message 'warning)))
+    (let ((more nil))
+      (while info
+        (unless (cddr info)
+          (error "bad xr--warn info args"))
+        (push (list (nth 0 info) (nth 1 info) (nth 2 info) 'info)
+              more)
+        (setq info (cdddr info)))
+      (xr--add-diag-group warnings (cons (list beg end message 'warning)
+                                         (nreverse more))))))
 
 (defun xr--add-error (warnings beg end message)
-  (xr--add-diag warnings beg end message 'error))
+  (when warnings
+    (xr--add-diag-group warnings (list (list beg end message 'error)))))
 
 (define-error 'xr-parse-error "xr parsing error")
 
@@ -1999,9 +2009,12 @@ The alists are mapping from the default choice.")
             (end (nth 3 err)))
         (xr--add-error ,warnings beg end msg)))))
 
-(defun xr--sort-diags (diags)
-  ;; FIXME: use new-style sort in Emacs 30
-  (sort diags #'car-less-than-car))
+(defalias 'xr--sort-diags
+  (if (>= emacs-major-version 30)
+      (lambda (diags)
+        (with-suppressed-warnings ((callargs sort))  ; hush emacs <30
+          (sort diags :key #'caar :in-place t)))
+    (lambda (diags) (sort diags (lambda (a b) (< (caar a) (caar b)))))))
 
 ;;;###autoload
 (defun xr (re-string &optional dialect)
@@ -2031,8 +2044,8 @@ See `xr' for a description of the DIALECT argument."
 ;;;###autoload
 (defun xr-lint (re-string &optional purpose checks)
   "Detect dubious practices and possible mistakes in RE-STRING.
-This includes uses of tolerated but discouraged constructs.
-Outright regexp syntax violations are signalled as errors.
+This includes uses of tolerated but discouraged constructs, as well
+as outright syntax errors.
 
 If PURPOSE is `file', perform additional checks assuming that RE-STRING
 is used to match a file name.
@@ -2041,8 +2054,10 @@ If CHECKS is absent or nil, only perform checks that are very
 likely to indicate mistakes; if `all', include all checks,
 including ones more likely to generate false alarms.
 
-Return a list of (BEG END COMMENT SEVERITY) where COMMENT applies at offsets
-BEG..END inclusive in RE-STRING, and SEVERITY is `warning' or `error'."
+Return a list of lists of (BEG END COMMENT SEVERITY), where COMMENT
+applies at offsets BEG..END inclusive in RE-STRING, and SEVERITY is
+`error', `warning' or `info'. The middle list level groups diagnostics
+about the same problem."
   (unless (memq purpose '(nil file))
     (error "Bad xr-lint PURPOSE argument: %S" purpose))
   (unless (memq checks '(nil all))
@@ -2055,12 +2070,15 @@ BEG..END inclusive in RE-STRING, and SEVERITY is `warning' or `error'."
 ;;;###autoload
 (defun xr-skip-set-lint (skip-set-string)
   "Detect dubious practices and possible mistakes in SKIP-SET-STRING.
-This includes uses of tolerated but discouraged constructs.
-Outright syntax violations are signalled as errors.
+This includes uses of tolerated but discouraged constructs, as well
+as outright syntax errors.
 The argument is interpreted according to the syntax of
 `skip-chars-forward' and `skip-chars-backward'.
-Return a list of (BEG END COMMENT) where COMMENT applies at offsets
-BEG..END inclusive in SKIP-SET-STRING, and SEVERITY is `warning' or `error'."
+
+Return a list of lists of (BEG END COMMENT SEVERITY), where COMMENT
+applies at offsets BEG..END inclusive in SKIP-SET-STRING, and SEVERITY is
+`error', `warning' or `info'. The middle list level groups diagnostics
+about the same problem."
   (let ((warnings (list nil)))
     (xr--error-to-warnings
      warnings (xr--parse-skip-set skip-set-string warnings))

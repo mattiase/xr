@@ -35,8 +35,8 @@
                  '(xr-parse-error "Backslash at end of regexp" 2 2)))
   (let ((text-quoting-style 'grave))
     (should (equal (xr-lint "$b\\")
-                   '((0 0 "Unescaped literal `$'" warning)
-                     (2 2 "Backslash at end of regexp" error))))
+                   '(((0 0 "Unescaped literal `$'" warning))
+                     ((2 2 "Backslash at end of regexp" error)))))
     ))
 
 (ert-deftest xr-repeat ()
@@ -405,65 +405,65 @@
     (should (equal (xr-lint "^a*\\[\\?\\$\\(b\\{3\\}\\|c\\)$")
                    nil))
     (should (equal (xr-lint "a^b$c")
-                   '((1 1 "Unescaped literal `^'" warning)
-                     (3 3 "Unescaped literal `$'" warning))))
+                   '(((1 1 "Unescaped literal `^'" warning))
+                     ((3 3 "Unescaped literal `$'" warning)))))
     (should (equal (xr-lint "^**$")
-                   '((1 1 "Unescaped literal `*'" warning))))
+                   '(((1 1 "Unescaped literal `*'" warning)))))
     (should (equal (xr-lint "a\\|\\`?b")
-                   '((5 5 "Unescaped literal `?'" warning))))
+                   '(((5 5 "Unescaped literal `?'" warning)))))
     (should (equal (xr-lint "a\\|\\`\\{3,4\\}b")
-                   '((5 6 "Escaped non-special character `{'" warning)
-                     (10 11 "Escaped non-special character `}'" warning))))
+                   '(((5 6 "Escaped non-special character `{'" warning))
+                     ((10 11 "Escaped non-special character `}'" warning)))))
     (should (equal (xr-lint "\\{\\(+\\|?\\)\\[\\]\\}\\\t")
-                   '((0  1 "Escaped non-special character `{'" warning)
-                     (4  4 "Unescaped literal `+'" warning)
-                     (7  7 "Unescaped literal `?'" warning)
-                     (14 15 "Escaped non-special character `}'" warning)
-                     (16 17 "Escaped non-special character `\\t'" warning))))
+                   '(((0  1 "Escaped non-special character `{'" warning))
+                     ((4  4 "Unescaped literal `+'" warning))
+                     ((7  7 "Unescaped literal `?'" warning))
+                     ((14 15 "Escaped non-special character `}'" warning))
+                     ((16 17 "Escaped non-special character `\\t'" warning)))))
     (should (equal (xr-lint "\\}\\w\\a\\b\\%")
-                   '((0 1 "Escaped non-special character `}'" warning)
-                     (4 5 "Escaped non-special character `a'" warning)
-                     (8 9 "Escaped non-special character `%'" warning))))
+                   '(((0 1 "Escaped non-special character `}'" warning))
+                     ((4 5 "Escaped non-special character `a'" warning))
+                     ((8 9 "Escaped non-special character `%'" warning)))))
     (should (equal (xr-lint "a?+b+?\\(?:c*\\)*d\\{3\\}+e*?\\{2,5\\}")
-                   '((2 2 "Repetition of option" warning)
-                     (14 14 "Repetition of repetition" warning)
-                     (25 31 "Repetition of repetition" warning))))
+                   '(((2 2 "Repetition of option" warning))
+                     ((14 14 "Repetition of repetition" warning))
+                     ((25 31 "Repetition of repetition" warning)))))
     (should (equal (xr-lint "\\(?:a+\\)?")
                    nil))
     (should (equal (xr-lint "\\(a*\\)*\\(b+\\)*\\(c*\\)?\\(d+\\)?")
-                   '((6 6 "Repetition of repetition" warning)
-                     (13 13 "Repetition of repetition" warning)
-                     (20 20 "Optional repetition" warning))))
+                   '(((6 6 "Repetition of repetition" warning))
+                     ((13 13 "Repetition of repetition" warning))
+                     ((20 20 "Optional repetition" warning)))))
     (should (equal (xr-lint "\\(a?\\)+\\(b?\\)?")
-                   '((6 6 "Repetition of option" warning)
-                     (13 13 "Optional option" warning))))
+                   '(((6 6 "Repetition of option" warning))
+                     ((13 13 "Optional option" warning)))))
     (should (equal (xr-lint "\\(e*\\)\\{3\\}")
-                   '((6 10 "Repetition of repetition" warning))))
+                   '(((6 10 "Repetition of repetition" warning)))))
     (should (equal (xr-lint "\\(a?\\)\\{4,7\\}")
-                   '((6 12 "Repetition of option" warning))))
+                   '(((6 12 "Repetition of option" warning)))))
     (should (equal (xr-lint "\\(?:a?b+c?d*\\)*")
-                   '((14 14 "Repetition of effective repetition" warning))))
+                   '(((14 14 "Repetition of effective repetition" warning)))))
     (should (equal (xr-lint "\\(a?b+c?d*\\)*")
-                   '((12 12 "Repetition of effective repetition" warning))))
+                   '(((12 12 "Repetition of effective repetition" warning)))))
     (should (equal (xr-lint "a*\\|b+\\|\\(?:a\\)*")
-                   '((8 15 "Duplicated alternative branch" warning))))
+                   '(((8 15 "Duplicated alternative branch" warning)))))
     (should (equal (xr-lint "a\\{,\\}")
-                   '((1 5 "Uncounted repetition" warning))))
+                   '(((1 5 "Uncounted repetition" warning)))))
     (should (equal (xr-lint "a\\{\\}")
-                   '((1 4 "Implicit zero repetition" warning))))
+                   '(((1 4 "Implicit zero repetition" warning)))))
     (should (equal (xr-lint "\\'*\\<?\\(?:$\\)+")
-                   '((2 2 "Repetition of zero-width assertion" warning)
-                     (5 5 "Optional zero-width assertion" warning)
-                     (13 13 "Repetition of zero-width assertion" warning))))
+                   '(((2 2 "Repetition of zero-width assertion" warning))
+                     ((5 5 "Optional zero-width assertion" warning))
+                     ((13 13 "Repetition of zero-width assertion" warning)))))
     (should
      (equal
       (xr-lint "\\b\\{2\\}\\(a\\|\\|b\\)\\{,8\\}")
-      '((2 6 "Repetition of zero-width assertion" warning)
-        (17 22 "Repetition of expression matching an empty string" warning))))
+      '(((2 6 "Repetition of zero-width assertion" warning))
+        ((17 22 "Repetition of expression matching an empty string" warning)))))
     (should (equal (xr-lint "\\(?:\\`\\)*")
-                   '((8 8 "Repetition of zero-width assertion" warning))))
+                   '(((8 8 "Repetition of zero-width assertion" warning)))))
     (should (equal (xr-lint "\\(?:\\`\\)\\{3,4\\}")
-                   '((8 14 "Repetition of zero-width assertion" warning))))
+                   '(((8 14 "Repetition of zero-width assertion" warning)))))
     ))
 
 (ert-deftest xr-lint-char-alt ()
@@ -472,24 +472,24 @@
                    nil))
     (should
      (equal (xr-lint "a[\\\\[]b[d-g.d-g]c")
-            '((3 3 "Duplicated `\\' inside character alternative" warning)
-              (12 14 "Duplicated `d-g' inside character alternative" warning))))
+            '(((3 3 "Duplicated `\\' inside character alternative" warning))
+              ((12 14 "Duplicated `d-g' inside character alternative" warning)))))
     (should (equal (xr-lint "[]-Qa-fz-t]")
-                   '((1 3 "Reversed range `]-Q' matches nothing" warning)
-                     (7 9 "Reversed range `z-t' matches nothing" warning))))
+                   '(((1 3 "Reversed range `]-Q' matches nothing" warning))
+                     ((7 9 "Reversed range `z-t' matches nothing" warning)))))
     (should (equal (xr-lint "[z-a][^z-a]")
                    nil))
     (should (equal (xr-lint "[^A-FFGI-LI-Mb-da-eg-ki-ns-t33-7]")
-                   '((5 5 "Character `F' included in range `A-F'" warning)
-                     (10 12 "Ranges `I-L' and `I-M' overlap" warning)
-                     (16 18 "Ranges `a-e' and `b-d' overlap" warning)
-                     (22 24 "Ranges `g-k' and `i-n' overlap" warning)
-                     (25 27 "Two-character range `s-t'" warning)
-                     (29 31 "Range `3-7' includes character `3'" warning))))
+                   '(((5 5 "Character `F' included in range `A-F'" warning))
+                     ((10 12 "Ranges `I-L' and `I-M' overlap" warning))
+                     ((16 18 "Ranges `a-e' and `b-d' overlap" warning))
+                     ((22 24 "Ranges `g-k' and `i-n' overlap" warning))
+                     ((25 27 "Two-character range `s-t'" warning))
+                     ((29 31 "Range `3-7' includes character `3'" warning)))))
     (should (equal (xr-lint "[a[:digit:]b[:punct:]c[:digit:]]")
-                   '((22 30 "Duplicated character class `[:digit:]'" warning))))
+                   '(((22 30 "Duplicated character class `[:digit:]'" warning)))))
     (should (equal (xr-lint "[0-9[|]*/]")
-                   '((4 4 "Suspect `[' in char alternative" warning))))
+                   '(((4 4 "Suspect `[' in char alternative" warning)))))
     (should (equal (xr-lint "[^][-].]")
                    nil))
     (should (equal (xr-lint "\\[\\([^\\[]*\\)\\]$")
@@ -497,24 +497,24 @@
     (should (equal (xr-lint "[0-1]")
                    nil))
     (should (equal (xr-lint "[^]-][]-^]")
-                   '((6 8 "Two-character range `]-^'" warning))))
+                   '(((6 8 "Two-character range `]-^'" warning)))))
     (should
      (equal
       (xr-lint "[-A-Z][A-Z-][A-Z-a][^-A-Z][]-a][A-Z---.]")
-      '((16 16
-            "Literal `-' not first or last in character alternative" warning))))
+      '(((16 16
+             "Literal `-' not first or last in character alternative" warning)))))
     ;; The range "[\x70-\x8f]" only includes 70..7f and 3fff80..3fff8f;
     ;; the gap 80..3fff7f is excluded.
     (should (equal (xr-lint "[\x70-\x8f∃]") nil))
     (should (equal (xr-lint "[\x70-\x8f\x7e-å]")
-                   '((4 6 "Ranges `\x70-\\x7f' and `\x7e-å' overlap" warning))))
+                   '(((4 6 "Ranges `\x70-\\x7f' and `\x7e-å' overlap" warning)))))
     (should
      (equal (xr-lint "[\x70-\x8få-\x82]")
-            '((4 6 "Ranges `å-\\x82' and `\\x80-\\x8f' overlap" warning))))
+            '(((4 6 "Ranges `å-\\x82' and `\\x80-\\x8f' overlap" warning)))))
     (should
      (equal (xr-lint "[A-z]")
-            '((1 3 "Range `A-z' between upper and lower case includes symbols"
-                 warning))))
+            '(((1 3 "Range `A-z' between upper and lower case includes symbols"
+                  warning)))))
     ))
 
 (ert-deftest xr-lint-noisy ()
@@ -526,34 +526,34 @@
          (equal
           (xr-lint "[0-9+-/*][&-+=]" nil checks)
           (if (eq checks 'all)
-              '((4 6 "Suspect character range `+-/': should `-' be literal?"
-                   warning)
-                (10 12 "Suspect character range `&-+': should `-' be literal?"
+              '(((4 6 "Suspect character range `+-/': should `-' be literal?"
                     warning))
+                ((10 12 "Suspect character range `&-+': should `-' be literal?"
+                     warning)))
             nil)))
         (should
          (equal
           (xr-lint "[ \\t][-.\\d][\\Sw][\\rnt]" nil checks)
           (if (eq checks 'all)
-              '((2 3 "Possibly erroneous `\\t' in character alternative"
-                   warning)
-                (8 9 "Possibly erroneous `\\d' in character alternative"
-                   warning)
-                (12 13 "Possibly erroneous `\\S' in character alternative"
-                    warning)))))
+              '(((2 3 "Possibly erroneous `\\t' in character alternative"
+                    warning))
+                ((8 9 "Possibly erroneous `\\d' in character alternative"
+                    warning))
+                ((12 13 "Possibly erroneous `\\S' in character alternative"
+                     warning))))))
         (should (equal (xr-lint "\\(?:ta\\)\\(:?da\\)\\(:?\\)" nil checks)
                        (if (eq checks 'all)
-                           '((10 11 "Possibly mistyped `:?' at start of group"
-                                 warning))
+                           '(((10 11 "Possibly mistyped `:?' at start of group"
+                                  warning)))
                          nil)))
         (should
          (equal
           (xr-lint "%\\|[abc]\\|[[:digit:]]\\|\\s-\\|\\s_"
                    nil checks)
           (if (eq checks 'all)
-              '((0 7 "Or-pattern more efficiently expressed as character alternative" warning)
-                (3 20 "Or-pattern more efficiently expressed as character alternative" warning)
-                (10 25 "Or-pattern more efficiently expressed as character alternative" warning))
+              '(((0 7 "Or-pattern more efficiently expressed as character alternative" warning))
+                ((3 20 "Or-pattern more efficiently expressed as character alternative" warning))
+                ((10 25 "Or-pattern more efficiently expressed as character alternative" warning)))
             nil)))
         ))))
 
@@ -562,73 +562,73 @@
     (should
      (equal
       (xr-lint "\\(?:a*b?\\)*\\(c\\|d\\|\\)+\\(^\\|e\\)*\\(?:\\)*")
-      '((10 10 "Repetition of expression matching an empty string" warning)
-        (21 21 "Repetition of expression matching an empty string" warning))))
+      '(((10 10 "Repetition of expression matching an empty string" warning))
+        ((21 21 "Repetition of expression matching an empty string" warning)))))
     (should
      (equal
       (xr-lint "\\(?:a*?b??\\)+?")
-      '((12 13 "Repetition of expression matching an empty string" warning))))
+      '(((12 13 "Repetition of expression matching an empty string" warning)))))
     (should
      (equal (xr-lint "\\(?:a*b?\\)?")
-            '((10 10 "Optional expression matching an empty string"
-                  warning))))))
+            '(((10 10 "Optional expression matching an empty string"
+                   warning)))))))
 
 (ert-deftest xr-lint-branch-subsumption ()
   (let ((text-quoting-style 'grave))
     (should
      (equal (xr-lint "a.cde*f?g\\|g\\|abcdefg")
-            '((14 20 "Branch matches subset of a previous branch" warning))))
+            '(((14 20 "Branch matches subset of a previous branch" warning)))))
     (should
      (equal (xr-lint "abcd\\|e\\|[aA].[^0-9z]d")
-            '((9 21 "Branch matches superset of a previous branch" warning))))
+            '(((9 21 "Branch matches superset of a previous branch" warning)))))
     (should
      (equal (xr-lint "\\(?:\\(a\\)\\|.\\)\\(?:a\\|\\(.\\)\\)")
-            '((21 25 "Branch matches superset of a previous branch" warning))))
+            '(((21 25 "Branch matches superset of a previous branch" warning)))))
     (should
      (equal (xr-lint ".\\|\n\\|\r")
-            '((6 6 "Branch matches subset of a previous branch" warning))))
+            '(((6 6 "Branch matches subset of a previous branch" warning)))))
     (should
      (equal (xr-lint "[^mM]\\|[^a-zA-Z]")
-            '((7 15 "Branch matches subset of a previous branch" warning))))
+            '(((7 15 "Branch matches subset of a previous branch" warning)))))
     (should (equal (xr-lint "[^mM]\\|[^A-LN-Z]")
                    nil))
     (should (equal (xr-lint "[ab]\\|[^bcd]")
                    nil))
     (should
      (equal (xr-lint "[ab]\\|[^cd]")
-            '((6 10 "Branch matches superset of a previous branch" warning))))
+            '(((6 10 "Branch matches superset of a previous branch" warning)))))
     (should (equal (xr-lint ".\\|[a\n]")
                    nil))
     (should
      (equal (xr-lint "ab?c+\\|a?b*c*")
-            '((7 12 "Branch matches superset of a previous branch" warning))))
+            '(((7 12 "Branch matches superset of a previous branch" warning)))))
     (should
      (equal (xr-lint "\\(?:[aA]\\|b\\)\\|a")
-            '((15 15 "Branch matches subset of a previous branch" warning))))
+            '(((15 15 "Branch matches subset of a previous branch" warning)))))
     (should
      (equal (xr-lint "\\(?:a\\|b\\)\\|[abc]")
-            '((12 16 "Branch matches superset of a previous branch" warning))))
+            '(((12 16 "Branch matches superset of a previous branch" warning)))))
     (should
      (equal (xr-lint "\\(?:a\\|b\\)\\|\\(?:[abd]\\|[abc]\\)")
-            '((12 29 "Branch matches superset of a previous branch" warning))))
+            '(((12 29 "Branch matches superset of a previous branch" warning)))))
     (should
      (equal (xr-lint "ab\\|abc?")
-            '((4 7 "Branch matches superset of a previous branch" warning))))
+            '(((4 7 "Branch matches superset of a previous branch" warning)))))
     (should
      (equal (xr-lint "abc\\|abcd*e?")
-            '((5 11 "Branch matches superset of a previous branch" warning))))
+            '(((5 11 "Branch matches superset of a previous branch" warning)))))
     (should (equal (xr-lint "[a[:digit:]]\\|[a\n]")
                    nil))
     (should
      (equal (xr-lint "[a[:ascii:]]\\|[a\n]")
-            '((14 17 "Branch matches subset of a previous branch" warning))))
+            '(((14 17 "Branch matches subset of a previous branch" warning)))))
 
     (should
      (equal (xr-lint "[[:alnum:]]\\|[[:alpha:]]")
-            '((13 23 "Branch matches subset of a previous branch" warning))))
+            '(((13 23 "Branch matches subset of a previous branch" warning)))))
     (should
      (equal (xr-lint "[[:alnum:]%]\\|[[:alpha:]%]")
-            '((14 25 "Branch matches subset of a previous branch" warning))))
+            '(((14 25 "Branch matches subset of a previous branch" warning)))))
     (should (equal (xr-lint "[[:xdigit:]%]\\|[[:alpha:]%]")
                    nil))
     (should (equal (xr-lint "[[:alnum:]]\\|[^[:alpha:]]")
@@ -637,13 +637,13 @@
                    nil))
     (should
      (equal (xr-lint "[[:digit:]]\\|[^[:punct:]]")
-            '((13 24 "Branch matches superset of a previous branch" warning))))
+            '(((13 24 "Branch matches superset of a previous branch" warning)))))
     (should
      (equal (xr-lint "[^[:digit:]]\\|[[:punct:]]")
-            '((14 24 "Branch matches subset of a previous branch" warning))))
+            '(((14 24 "Branch matches subset of a previous branch" warning)))))
     (should
      (equal (xr-lint "[^[:digit:]]\\|[^[:xdigit:]]")
-            '((14 26 "Branch matches subset of a previous branch" warning))))
+            '(((14 26 "Branch matches subset of a previous branch" warning)))))
     (should (equal (xr-lint "[^[:print:]]\\|[[:ascii:]]")
                    nil))
     (should (equal (xr-lint "[[:print:]]\\|[^[:ascii:]]")
@@ -652,144 +652,144 @@
                    nil))
     (should
      (equal (xr-lint "[[:digit:][:cntrl:]]\\|[[:ascii:]]")
-            '((22 32 "Branch matches superset of a previous branch" warning))))
+            '(((22 32 "Branch matches superset of a previous branch" warning)))))
     (should
      (equal (xr-lint "[[:alpha:]]\\|A")
-            '((13 13 "Branch matches subset of a previous branch" warning))))
+            '(((13 13 "Branch matches subset of a previous branch" warning)))))
     (should
      (equal (xr-lint "[[:alpha:]]\\|[A-E]")
-            '((13 17 "Branch matches subset of a previous branch" warning))))
+            '(((13 17 "Branch matches subset of a previous branch" warning)))))
     (should
      (equal (xr-lint "[[:alpha:]3-7]\\|[A-E46]")
-            '((16 22 "Branch matches subset of a previous branch" warning))))
+            '(((16 22 "Branch matches subset of a previous branch" warning)))))
     (should
      (equal (xr-lint "[^[:alpha:]]\\|[123]")
-            '((14 18 "Branch matches subset of a previous branch" warning))))
+            '(((14 18 "Branch matches subset of a previous branch" warning)))))
     (should
      (equal (xr-lint "[!-@]\\|[[:digit:]]")
-            '((7 17 "Branch matches subset of a previous branch" warning))))
+            '(((7 17 "Branch matches subset of a previous branch" warning)))))
     (should
      (equal (xr-lint "[^a-z]\\|[[:digit:]]")
-            '((8 18 "Branch matches subset of a previous branch" warning))))
+            '(((8 18 "Branch matches subset of a previous branch" warning)))))
     (should
      (equal (xr-lint "[^[:punct:]]\\|[a-z]")
-            '((14 18 "Branch matches subset of a previous branch" warning))))
+            '(((14 18 "Branch matches subset of a previous branch" warning)))))
     (should
      (equal (xr-lint "[[:space:]]\\|[ \t\f]")
-            '((13 17 "Branch matches subset of a previous branch" warning))))
+            '(((13 17 "Branch matches subset of a previous branch" warning)))))
     (should
      (equal (xr-lint "[[:word:]]\\|[a-gH-P2357]")
-            '((12 23 "Branch matches subset of a previous branch" warning))))
+            '(((12 23 "Branch matches subset of a previous branch" warning)))))
     (should
      (equal (xr-lint "[^[:space:]]\\|[a-gH-P2357]")
-            '((14 25 "Branch matches subset of a previous branch" warning))))
+            '(((14 25 "Branch matches subset of a previous branch" warning)))))
     (should
      (equal (xr-lint "[^z-a]\\|[^0-9[:space:]]")
-            '((8 22 "Branch matches subset of a previous branch" warning))))
+            '(((8 22 "Branch matches subset of a previous branch" warning)))))
 
     (should
      (equal (xr-lint "\\(?:.\\|\n\\)\\|a")
-            '((12 12 "Branch matches subset of a previous branch" warning))))
+            '(((12 12 "Branch matches subset of a previous branch" warning)))))
     (should
      (equal (xr-lint "\\s-\\| ")
-            '((5 5 "Branch matches subset of a previous branch" warning))))
+            '(((5 5 "Branch matches subset of a previous branch" warning)))))
     (should
      (equal (xr-lint "\\S-\\|x")
-            '((5 5 "Branch matches subset of a previous branch" warning))))
+            '(((5 5 "Branch matches subset of a previous branch" warning)))))
     (should
      (equal (xr-lint "\\cl\\|å")
-            '((5 5 "Branch matches subset of a previous branch" warning))))
+            '(((5 5 "Branch matches subset of a previous branch" warning)))))
     (should
      (equal (xr-lint "\\Ca\\|ü")
-            '((5 5 "Branch matches subset of a previous branch" warning))))
+            '(((5 5 "Branch matches subset of a previous branch" warning)))))
     
     (should
      (equal (xr-lint "\\w\\|[^z-a]")
-            '((4 9 "Branch matches superset of a previous branch" warning))))
+            '(((4 9 "Branch matches superset of a previous branch" warning)))))
     (should
      (equal (xr-lint "\\W\\|[^z-a]")
-            '((4 9 "Branch matches superset of a previous branch" warning))))
+            '(((4 9 "Branch matches superset of a previous branch" warning)))))
     (should
      (equal (xr-lint "\\w\\|a")
-            '((4 4 "Branch matches subset of a previous branch" warning))))
+            '(((4 4 "Branch matches subset of a previous branch" warning)))))
     (should
      (equal (xr-lint "\\W\\|\f")
-            '((4 4 "Branch matches subset of a previous branch" warning))))
+            '(((4 4 "Branch matches subset of a previous branch" warning)))))
     (should
      (equal (xr-lint "[[:punct:]]\\|!")
-            '((13 13 "Branch matches subset of a previous branch" warning))))
+            '(((13 13 "Branch matches subset of a previous branch" warning)))))
     (should
      (equal (xr-lint "[[:ascii:]]\\|[^α-ω]")
-            '((13 18 "Branch matches superset of a previous branch" warning))))
+            '(((13 18 "Branch matches superset of a previous branch" warning)))))
     (should
      (equal (xr-lint "[^a-f]\\|[h-z]")
-            '((8 12 "Branch matches subset of a previous branch" warning))))
+            '(((8 12 "Branch matches subset of a previous branch" warning)))))
     (should
      (equal (xr-lint "[0-9]\\|\\S(")
-            '((7 9 "Branch matches superset of a previous branch" warning))))
+            '(((7 9 "Branch matches superset of a previous branch" warning)))))
     (should
      (equal (xr-lint "a+\\|[ab]+")
-            '((4 8 "Branch matches superset of a previous branch" warning))))
+            '(((4 8 "Branch matches superset of a previous branch" warning)))))
     (should
      (equal (xr-lint "[ab]?\\|a?")
-            '((7 8 "Branch matches subset of a previous branch" warning))))
+            '(((7 8 "Branch matches subset of a previous branch" warning)))))
     ))
 
 (ert-deftest xr-lint-subsumed-repetition ()
   (let ((text-quoting-style 'grave))
     (should
      (equal (xr-lint "\\(?:a.c\\|def\\)+\\(?:abc\\)*")
-            '((15 24 "Repetition subsumed by preceding repetition" warning))))
+            '(((15 24 "Repetition subsumed by preceding repetition" warning)))))
 
     ;; Exhaustive test of all possible combinations.
     (should
      (equal (xr-lint "[ab]+a?,a?[ab]+,[ab]+a*,a*[ab]+")
-            '((5 6 "Repetition subsumed by preceding repetition" warning)
-              (10 14 "Repetition subsumes preceding repetition" warning)
-              (21 22 "Repetition subsumed by preceding repetition" warning)
-              (26 30 "Repetition subsumes preceding repetition" warning))))
+            '(((5 6 "Repetition subsumed by preceding repetition" warning))
+              ((10 14 "Repetition subsumes preceding repetition" warning))
+              ((21 22 "Repetition subsumed by preceding repetition" warning))
+              ((26 30 "Repetition subsumes preceding repetition" warning)))))
 
     (should
      (equal (xr-lint "[ab]*a?,a?[ab]*,[ab]*a*,a*[ab]*")
-            '((5 6 "Repetition subsumed by preceding repetition" warning)
-              (10 14 "Repetition subsumes preceding repetition" warning)
-              (21 22 "Repetition subsumed by preceding repetition" warning)
-              (26 30 "Repetition subsumes preceding repetition" warning))))
+            '(((5 6 "Repetition subsumed by preceding repetition" warning))
+              ((10 14 "Repetition subsumes preceding repetition" warning))
+              ((21 22 "Repetition subsumed by preceding repetition" warning))
+              ((26 30 "Repetition subsumes preceding repetition" warning)))))
 
     (should
      (equal (xr-lint "a+a?,a?a+,a+a*,a*a+,a*a?,a?a*,a*a*")
-            '((2 3 "Repetition subsumed by preceding repetition" warning)
-              (7 8 "Repetition subsumes preceding repetition" warning)
-              (12 13 "Repetition subsumed by preceding repetition" warning)
-              (17 18 "Repetition subsumes preceding repetition" warning)
-              (22 23 "Repetition subsumed by preceding repetition" warning)
-              (27 28 "Repetition subsumes preceding repetition" warning)
-              (32 33 "Repetition subsumed by preceding repetition" warning))))
+            '(((2 3 "Repetition subsumed by preceding repetition" warning))
+              ((7 8 "Repetition subsumes preceding repetition" warning))
+              ((12 13 "Repetition subsumed by preceding repetition" warning))
+              ((17 18 "Repetition subsumes preceding repetition" warning))
+              ((22 23 "Repetition subsumed by preceding repetition" warning))
+              ((27 28 "Repetition subsumes preceding repetition" warning))
+              ((32 33 "Repetition subsumed by preceding repetition" warning)))))
 
     (should
      (equal (xr-lint "[ab]+a??,a??[ab]+,[ab]+a*?,a*?[ab]+")
-            '((5 7 "Repetition subsumed by preceding repetition" warning)
-              (12 16 "Repetition subsumes preceding repetition" warning)
-              (23 25 "Repetition subsumed by preceding repetition" warning)
-              (30 34 "Repetition subsumes preceding repetition" warning))))
+            '(((5 7 "Repetition subsumed by preceding repetition" warning))
+              ((12 16 "Repetition subsumes preceding repetition" warning))
+              ((23 25 "Repetition subsumed by preceding repetition" warning))
+              ((30 34 "Repetition subsumes preceding repetition" warning)))))
 
     (should
      (equal (xr-lint "[ab]*a??,a??[ab]*,[ab]*a*?,a*?[ab]*")
-            '((5 7 "Repetition subsumed by preceding repetition" warning)
-              (12 16 "Repetition subsumes preceding repetition" warning)
-              (23 25 "Repetition subsumed by preceding repetition" warning)
-              (30 34 "Repetition subsumes preceding repetition" warning))))
+            '(((5 7 "Repetition subsumed by preceding repetition" warning))
+              ((12 16 "Repetition subsumes preceding repetition" warning))
+              ((23 25 "Repetition subsumed by preceding repetition" warning))
+              ((30 34 "Repetition subsumes preceding repetition" warning)))))
 
     (should
      (equal (xr-lint "a+a??,a??a+,a+a*?,a*?a+,a*a??,a??a*,a*a*?,a*?a*")
-            '((2 4 "Repetition subsumed by preceding repetition" warning)
-              (9 10 "Repetition subsumes preceding repetition" warning)
-              (14 16 "Repetition subsumed by preceding repetition" warning)
-              (21 22 "Repetition subsumes preceding repetition" warning)
-              (26 28 "Repetition subsumed by preceding repetition" warning)
-              (33 34 "Repetition subsumes preceding repetition" warning)
-              (38 40 "Repetition subsumed by preceding repetition" warning)
-              (45 46 "Repetition subsumes preceding repetition" warning))))
+            '(((2 4 "Repetition subsumed by preceding repetition" warning))
+              ((9 10 "Repetition subsumes preceding repetition" warning))
+              ((14 16 "Repetition subsumed by preceding repetition" warning))
+              ((21 22 "Repetition subsumes preceding repetition" warning))
+              ((26 28 "Repetition subsumed by preceding repetition" warning))
+              ((33 34 "Repetition subsumes preceding repetition" warning))
+              ((38 40 "Repetition subsumed by preceding repetition" warning))
+              ((45 46 "Repetition subsumes preceding repetition" warning)))))
 
     (should (equal (xr-lint "[ab]+?a?,a?[ab]+?,[ab]+?a*,a*[ab]+?")
                    nil))
@@ -799,32 +799,32 @@
 
     (should
      (equal (xr-lint "a+?a?,a?a+?,a+?a*,a*a+?,a*?a?,a?a*?,a*?a*,a*a*?")
-            '((39 40 "Repetition subsumes preceding repetition" warning)
-              (44 46 "Repetition subsumed by preceding repetition" warning))))
+            '(((39 40 "Repetition subsumes preceding repetition" warning))
+              ((44 46 "Repetition subsumed by preceding repetition" warning)))))
 
     (should
      (equal (xr-lint "[ab]+?a??,a??[ab]+?,[ab]+?a*?,a*?[ab]+?")
-            '((6 8 "Repetition subsumed by preceding repetition" warning)
-              (13 18 "Repetition subsumes preceding repetition" warning)
-              (26 28 "Repetition subsumed by preceding repetition" warning)
-              (33 38"Repetition subsumes preceding repetition" warning))))
+            '(((6 8 "Repetition subsumed by preceding repetition" warning))
+              ((13 18 "Repetition subsumes preceding repetition" warning))
+              ((26 28 "Repetition subsumed by preceding repetition" warning))
+              ((33 38"Repetition subsumes preceding repetition" warning)))))
 
     (should
      (equal (xr-lint "[ab]*?a??,a??[ab]*?,[ab]*?a*?,a*?[ab]*?")
-            '((6 8 "Repetition subsumed by preceding repetition" warning)
-              (13 18 "Repetition subsumes preceding repetition" warning)
-              (26 28 "Repetition subsumed by preceding repetition" warning)
-              (33 38 "Repetition subsumes preceding repetition" warning))))
+            '(((6 8 "Repetition subsumed by preceding repetition" warning))
+              ((13 18 "Repetition subsumes preceding repetition" warning))
+              ((26 28 "Repetition subsumed by preceding repetition" warning))
+              ((33 38 "Repetition subsumes preceding repetition" warning)))))
 
     (should
      (equal (xr-lint "a+?a??,a??a+?,a+?a*?,a*?a+?,a*?a??,a??a*?,a*?a*?")
-            '((3 5 "Repetition subsumed by preceding repetition" warning)
-              (10 12 "Repetition subsumes preceding repetition" warning)
-              (17 19 "Repetition subsumed by preceding repetition" warning)
-              (24 26 "Repetition subsumes preceding repetition" warning)
-              (31 33 "Repetition subsumed by preceding repetition" warning)
-              (38 40 "Repetition subsumes preceding repetition" warning)
-              (45 47 "Repetition subsumed by preceding repetition" warning))))
+            '(((3 5 "Repetition subsumed by preceding repetition" warning))
+              ((10 12 "Repetition subsumes preceding repetition" warning))
+              ((17 19 "Repetition subsumed by preceding repetition" warning))
+              ((24 26 "Repetition subsumes preceding repetition" warning))
+              ((31 33 "Repetition subsumed by preceding repetition" warning))
+              ((38 40 "Repetition subsumes preceding repetition" warning))
+              ((45 47 "Repetition subsumed by preceding repetition" warning)))))
     ))
 
 (ert-deftest xr-lint-wrapped-subsumption ()
@@ -832,56 +832,56 @@
     (should
      (equal
       (xr-lint "\\(?:a*x[ab]+\\)*")
-      '((14 14
-            "Last item in repetition subsumes first item (wrapped)" warning))))
+      '(((14 14
+             "Last item in repetition subsumes first item (wrapped)" warning)))))
     (should
      (equal
       (xr-lint "\\([ab]*xya?\\)+")
-      '((13 13
-            "First item in repetition subsumes last item (wrapped)" warning))))
+      '(((13 13
+             "First item in repetition subsumes last item (wrapped)" warning)))))
     (should
      (equal
       (xr-lint "\\(?3:a*xa*\\)\\{7\\}")
-      '((12 16
-            "Last item in repetition subsumes first item (wrapped)" warning))))
+      '(((12 16
+             "Last item in repetition subsumes first item (wrapped)" warning)))))
     ))
 
 (ert-deftest xr-lint-bad-anchor ()
   (let ((text-quoting-style 'grave))
     (should (equal (xr-lint "a\\(?:^\\)")
-                   '((1 7 "Line-start anchor follows non-newline" warning))))
+                   '(((1 7 "Line-start anchor follows non-newline" warning)))))
     (should (equal (xr-lint "a?\\(?:^\\)")
-                   '((2 8 "Line-start anchor follows non-newline" warning))))
+                   '(((2 8 "Line-start anchor follows non-newline" warning)))))
     (should (equal (xr-lint "a\\(?:^\\|b\\)")
-                   '((1 10 "Line-start anchor follows non-newline" warning))))
+                   '(((1 10 "Line-start anchor follows non-newline" warning)))))
     (should (equal (xr-lint "a?\\(?:^\\|b\\)")
                    nil))
     (should (equal (xr-lint "\\(?:$\\)a")
-                   '((7 7 "Non-newline follows end-of-line anchor" warning))))
+                   '(((7 7 "Non-newline follows end-of-line anchor" warning)))))
     (should (equal (xr-lint "\\(?:$\\)\\(\n\\|a\\)")
-                   '((7 14 "Non-newline follows end-of-line anchor" warning))))
+                   '(((7 14 "Non-newline follows end-of-line anchor" warning)))))
     (should (equal (xr-lint "\\(?:$\\|b\\)a")
-                   '((10 10 "Non-newline follows end-of-line anchor" warning))))
+                   '(((10 10 "Non-newline follows end-of-line anchor" warning)))))
     (should (equal (xr-lint "\\(?:$\\|b\\)\\(\n\\|a\\)")
                    nil))
     (should (equal (xr-lint "\\(?3:$\\)[ab]\\(?2:^\\)")
-                   '((8 11 "Non-newline follows end-of-line anchor" warning)
-                     (12 19 "Line-start anchor follows non-newline" warning))))
+                   '(((8 11 "Non-newline follows end-of-line anchor" warning))
+                     ((12 19 "Line-start anchor follows non-newline" warning)))))
     (should (equal (xr-lint ".\\(?:^$\\).")
-                   '((1 8 "Line-start anchor follows non-newline" warning)
-                     (9 9 "Non-newline follows end-of-line anchor" warning))))
+                   '(((1 8 "Line-start anchor follows non-newline" warning))
+                     ((9 9 "Non-newline follows end-of-line anchor" warning)))))
     (should
      (equal (xr-lint "\\'b")
-            '((2 2 "Non-empty pattern follows end-of-text anchor" warning))))
+            '(((2 2 "Non-empty pattern follows end-of-text anchor" warning)))))
     (should
      (equal (xr-lint "\\'b?")
-            '((2 3 "Non-empty pattern follows end-of-text anchor" warning))))
+            '(((2 3 "Non-empty pattern follows end-of-text anchor" warning)))))
     (should (equal (xr-lint "\\(?:a\\|\\'\\)b")
-                   '((11 11
-                      "Non-empty pattern follows end-of-text anchor" warning))))
+                   '(((11 11
+                          "Non-empty pattern follows end-of-text anchor" warning)))))
     (should
      (equal (xr-lint "\\'\\(a\\|b?\\)")
-            '((2 10 "Non-empty pattern follows end-of-text anchor" warning))))
+            '(((2 10 "Non-empty pattern follows end-of-text anchor" warning)))))
     (should (equal (xr-lint "\\(?:a\\|\\'\\)b?")
                    nil))
     ))
@@ -890,13 +890,13 @@
   (let ((text-quoting-style 'grave))
     (should
      (equal (xr-lint "a.b\\.c.*d.?e.+f." 'file)
-            '((1 1 "Possibly unescaped `.' in file-matching regexp" warning)
-              (15 15 "Possibly unescaped `.' in file-matching regexp"
-                  warning))))
+            '(((1 1 "Possibly unescaped `.' in file-matching regexp" warning))
+              ((15 15 "Possibly unescaped `.' in file-matching regexp"
+                   warning)))))
     (should
      (equal (xr-lint "^abc$" 'file)
-            '((0 0 "Use \\` instead of ^ in file-matching regexp" warning)
-              (4 4 "Use \\' instead of $ in file-matching regexp" warning))))))
+            '(((0 0 "Use \\` instead of ^ in file-matching regexp" warning))
+              ((4 4 "Use \\' instead of $ in file-matching regexp" warning)))))))
 
 (ert-deftest xr-skip-set ()
   (should (equal (xr-skip-set "0-9a-fA-F+*")
@@ -945,32 +945,32 @@
 (ert-deftest xr-skip-set-lint ()
   (let ((text-quoting-style 'grave))
     (should (equal (xr-skip-set-lint "A[:ascii:]B[:space:][:ascii:]")
-                   '((20 28 "Duplicated character class `[:ascii:]'" warning))))
+                   '(((20 28 "Duplicated character class `[:ascii:]'" warning)))))
     (should (equal (xr-skip-set-lint "a\\bF-AM-M\\")
-                   '((1 2 "Unnecessarily escaped `b'" warning)
-                     (3 5 "Reversed range `F-A'" warning)
-                     (6 8 "Single-element range `M-M'" warning)
-                     (9 9 "Stray `\\' at end of string" warning))))
+                   '(((1 2 "Unnecessarily escaped `b'" warning))
+                     ((3 5 "Reversed range `F-A'" warning))
+                     ((6 8 "Single-element range `M-M'" warning))
+                     ((9 9 "Stray `\\' at end of string" warning)))))
     (should (equal (xr-skip-set-lint "A-Fa-z3D-KM-N!3-7\\!b")
-                   '((7 9 "Ranges `A-F' and `D-K' overlap" warning)
-                     (10 12 "Two-element range `M-N'" warning)
-                     (14 16 "Range `3-7' includes character `3'" warning)
-                     (17 17 "Duplicated character `!'" warning)
-                     (17 18 "Unnecessarily escaped `!'" warning)
-                     (19 19 "Character `b' included in range `a-z'" warning))))
+                   '(((7 9 "Ranges `A-F' and `D-K' overlap" warning))
+                     ((10 12 "Two-element range `M-N'" warning))
+                     ((14 16 "Range `3-7' includes character `3'" warning))
+                     ((17 17 "Duplicated character `!'" warning))
+                     ((17 18 "Unnecessarily escaped `!'" warning))
+                     ((19 19 "Character `b' included in range `a-z'" warning)))))
     (should (equal (xr-skip-set-lint "!-\\$")
-                   '((2 3 "Unnecessarily escaped `$'" warning))))
+                   '(((2 3 "Unnecessarily escaped `$'" warning)))))
     (should (equal (xr-skip-set-lint "[^a-z]")
-                   '((0 5 "Suspect skip set framed in `[...]'" warning))))
+                   '(((0 5 "Suspect skip set framed in `[...]'" warning)))))
     (should (equal (xr-skip-set-lint "[0-9]+")
-                   '((0 4. "Suspect skip set framed in `[...]'" warning))))
+                   '(((0 4. "Suspect skip set framed in `[...]'" warning)))))
     (should (equal (xr-skip-set-lint "[[:space:]].")
-                   '((0 10 "Suspect character class framed in `[...]'"
-                        warning))))
+                   '(((0 10 "Suspect character class framed in `[...]'"
+                         warning)))))
     (should (equal (xr-skip-set-lint "")
-                   '((0 nil "Empty set matches nothing" warning))))
+                   '(((0 nil "Empty set matches nothing" warning)))))
     (should (equal (xr-skip-set-lint "^")
-                   '((0 nil "Negated empty set matches anything" warning))))
+                   '(((0 nil "Negated empty set matches anything" warning)))))
     (should (equal (xr-skip-set-lint "A-Z-")
                    nil))
     (should (equal (xr-skip-set-lint "-A-Z")
@@ -978,13 +978,13 @@
     (should (equal (xr-skip-set-lint "^-A-Z")
                    nil))
     (should (equal (xr-skip-set-lint "A-Z-z")
-                   '((3 3 "Literal `-' not first or last" warning))))
+                   '(((3 3 "Literal `-' not first or last" warning)))))
     (should (equal (xr-skip-set-lint "\x70-\x8f∃") nil))
     (should (equal (xr-skip-set-lint "\x70-\x8f\x7e-å")
-                   '((3 5 "Ranges `\x70-\\x7f' and `\x7e-å' overlap" warning))))
+                   '(((3 5 "Ranges `\x70-\\x7f' and `\x7e-å' overlap" warning)))))
     (should (equal (xr-skip-set-lint "\x70-\x8få-\x82")
-                   '((3 5 "Ranges `å-\\x82' and `\\x80-\\x8f' overlap"
-                        warning))))
+                   '(((3 5 "Ranges `å-\\x82' and `\\x80-\\x8f' overlap"
+                         warning)))))
     ))
 
 ;;; Unit tests for internal functions
