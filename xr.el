@@ -1997,6 +1997,10 @@ The alists are mapping from the default choice.")
             (end (nth 3 err)))
         (xr--add-error ,warnings beg end msg)))))
 
+(defun xr--sort-diags (diags)
+  ;; FIXME: use new-style sort in Emacs 30
+  (sort diags #'car-less-than-car))
+
 ;;;###autoload
 (defun xr (re-string &optional dialect)
   "Convert a regexp string to rx notation; the inverse of `rx'.
@@ -2044,7 +2048,7 @@ BEG..END inclusive in RE-STRING."
   (let ((warnings (list nil)))
     (xr--error-to-warnings
      warnings (xr--parse re-string warnings purpose checks))
-    (sort (car warnings) #'car-less-than-car)))
+    (xr--sort-diags (car warnings))))
 
 ;;;###autoload
 (defun xr-skip-set-lint (skip-set-string)
@@ -2058,7 +2062,7 @@ BEG..END inclusive in SKIP-SET-STRING."
   (let ((warnings (list nil)))
     (xr--error-to-warnings
      warnings (xr--parse-skip-set skip-set-string warnings))
-    (sort (car warnings) #'car-less-than-car)))
+    (xr--sort-diags (car warnings))))
 
 (defun xr--escape-string (string &optional escape-printable)
   "Escape non-printing characters in a string for maximum readability.
