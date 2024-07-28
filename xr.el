@@ -126,12 +126,17 @@ END is nil if unknown."
                         (xr--error idx (1+ i)
                                    "No character class `[:%s:]'"
                                    (symbol-name sym)))
-                      (if (memq sym classes)
-                          (xr--warn
-                           warnings idx (1+ i)
-                           (format-message
-                            "Duplicated character class `[:%s:]'" sym))
-                        (push sym classes))
+                      (let ((prev (assq sym classes)))
+                        (if prev
+                            (let* ((prev-beg (cdr prev))
+                                   (prev-end (1+ (xr--string-search
+                                                  ":]" string prev-beg))))
+                              (xr--warn
+                               warnings idx (1+ i)
+                               (format-message
+                                "Duplicated character class `[:%s:]'" sym)
+                               prev-beg prev-end "Previous occurrence here"))
+                          (push (cons sym idx) classes)))
                       (setq idx (+ i 2))
                       t)))))
        ;; character range
@@ -259,12 +264,13 @@ END is nil if unknown."
                  ;; Duplicate character: drop it and warn.
                  ((and (eq (aref a 0) (aref a 1))
                        (eq (aref b 0) (aref b 1)))
-                  (xr--warn
-                   warnings (aref b 2) (aref b 2)
-                   (xr--escape-string
-                    (format-message
-                     "Duplicated `%c' inside character alternative"
-                     (aref this 0)))))
+                  (xr--warn warnings
+                            (aref b 2) (aref b 2)
+                            (xr--escape-string
+                             (format-message
+                              "Duplicated `%c' inside character alternative"
+                              (aref this 0)))
+                            (aref a 2) (aref a 2) "Previous occurrence here"))
                  ;; Duplicate range: drop it and warn.
                  ((and (eq (aref a 0) (aref b 0))
                        (eq (aref a 1) (aref b 1)))
@@ -273,7 +279,8 @@ END is nil if unknown."
                    (xr--escape-string
                     (format-message
                      "Duplicated `%c-%c' inside character alternative"
-                     (aref b 0) (aref b 1)))))
+                     (aref b 0) (aref b 1)))
+                   (aref a 2) (+ (aref a 2) 2) "Previous occurrence here"))
                  ;; Character in range: drop it and warn.
                  ((eq (aref a 0) (aref a 1))
                   (when (eq a this)
@@ -283,7 +290,8 @@ END is nil if unknown."
                    (xr--escape-string
                     (format-message
                      "Range `%c-%c' includes character `%c'"
-                     (aref b 0) (aref b 1) (aref a 0)))))
+                     (aref b 0) (aref b 1) (aref a 0)))
+                   (aref a 2) (aref a 2) "Previous occurrence here"))
                  ;; Same but other way around.
                  ((eq (aref b 0) (aref b 1))
                   (when (eq b this)
@@ -293,7 +301,8 @@ END is nil if unknown."
                    (xr--escape-string
                     (format-message
                      "Character `%c' included in range `%c-%c'"
-                     (aref b 0) (aref a 0) (aref a 1)))))
+                     (aref b 0) (aref a 0) (aref a 1)))
+                   (aref a 2) (+ (aref a 2) 2) "Previous occurrence here"))
                  ;; Overlapping ranges: merge and warn.
                  (t
                   (let ((this-end (aref this 1)))
@@ -303,7 +312,8 @@ END is nil if unknown."
                      (xr--escape-string
                       (format-message "Ranges `%c-%c' and `%c-%c' overlap"
                                       (aref this 0) this-end
-                                      (aref next 0) (aref next 1)))))))
+                                      (aref next 0) (aref next 1)))
+                     (aref a 2) (+ (aref a 2) 2) "Previous occurrence here"))))
                 (setcdr s (cddr s)))
             ;; No overlap.
             (setq s (cdr s)))))
@@ -341,8 +351,8 @@ END is nil if unknown."
                (null chars)
                (null ranges))
           (if negated
-              (list 'not (car classes))
-            (car classes)))
+              (list 'not (caar classes))
+            (caar classes)))
          ;; [^\n]: nonl.
          ((and negated
                (equal chars '(?\n))
@@ -360,7 +370,7 @@ END is nil if unknown."
                                   (list (apply #'concat (nreverse ranges))))
                              (and chars
                                   (list (apply #'string (nreverse chars))))
-                             (nreverse classes)))))
+                             (nreverse (mapcar #'car classes))))))
             (if negated
                 (list 'not set)
               set))))))))
@@ -579,6 +589,8 @@ like (* (* X) ... (* X))."
                (last (car (last operands)))
                (subsumption (xr--adjacent-subsumption last first)))
           (when subsumption
+            ;; FIXME: add info about first and last item.
+            ;; How do we get their locations?
             (xr--warn
              warnings beg end
              (if (eq subsumption 'b-subsumes-a)
@@ -680,29 +692,38 @@ like (* (* X) ... (* X))."
                                  (memq inner-op '(one-or-more +?)))))
                       (let ((outer-opt (eq operator-char ??))
                             (inner-opt (memq inner-op '(opt ??))))
-                        (xr--warn warnings idx end-idx
-                                      (if outer-opt
-                                          (if inner-opt
-                                              "Optional option"
-                                            "Optional repetition")
-                                        (if inner-opt
-                                            "Repetition of option"
-                                          "Repetition of repetition")))))
+                        (xr--warn warnings
+                                  idx end-idx
+                                  (if outer-opt
+                                      (if inner-opt
+                                          "Optional option"
+                                        "Optional repetition")
+                                    (if inner-opt
+                                        "Repetition of option"
+                                      "Repetition of repetition"))
+                                  (cadr locations) (1- idx)
+                                  "This is the inner expression")))
                      ((memq operand xr--zero-width-assertions)
-                      (xr--warn warnings idx end-idx
-                                    (if (eq operator-char ??)
-                                        "Optional zero-width assertion"
-                                      "Repetition of zero-width assertion")))
+                      (xr--warn warnings
+                                idx end-idx
+                                (if (eq operator-char ??)
+                                    "Optional zero-width assertion"
+                                  "Repetition of zero-width assertion")
+                                (cadr locations) (1- idx)
+                                "Zero-width assertion here"))
                      ((and (xr--matches-empty-p operand)
                            ;; Rejecting repetition of the empty string
                            ;; suppresses some false positives.
                            (not (equal operand "")))
-                      (xr--warn warnings idx end-idx
-                                    (concat
-                                     (if (eq operator-char ??)
-                                         "Optional expression"
-                                       "Repetition of expression")
-                                     " matching an empty string")))
+                      (xr--warn warnings
+                                idx end-idx
+                                (concat
+                                 (if (eq operator-char ??)
+                                     "Optional expression"
+                                   "Repetition of expression")
+                                 " matching an empty string")
+                                (cadr locations) (1- idx)
+                                "This expression matches an empty string"))
                      ((and (memq operator-char '(?* ?+))
                            (consp operand)
                            (memq (car operand) '(seq group))
@@ -717,12 +738,15 @@ like (* (* X) ... (* X))."
                                   (memq (caar nonzero-items)
                                         '( opt zero-or-more one-or-more
                                            +? *? ?? >=)))))
-                      (xr--warn warnings idx end-idx
-                                    "Repetition of effective repetition"))))
+                      (xr--warn warnings
+                                idx end-idx
+                                "Repetition of effective repetition"
+                                (cadr locations) (1- idx)
+                                "This expression contains a repetition"))))
                   ;; (* (* X) ... (* X)) etc: wrap-around subsumption
                   (unless (eq operator-char ??)
                     (xr--check-wrap-around-repetition
-                     operand idx end-idx warnings)))
+                     operand (cadr locations) end-idx warnings)))
                 (setq idx (1+ end-idx))
                 (setq sequence (cons (xr--postfix operator-char lazy operand)
                                      (cdr sequence)))
@@ -863,7 +887,7 @@ like (* (* X) ... (* X))."
                     (when warnings
                       (when (or (not upper) (>= upper 2))
                         (xr--check-wrap-around-repetition
-                         operand item-start (1- idx) warnings))
+                         operand (cadr locations) (1- idx) warnings))
 
                       (cond
                        ((and (consp operand)
@@ -884,21 +908,28 @@ like (* (* X) ... (* X))."
                                              (and (eq (car operand) 'group)
                                                   (memq (caadr operand)
                                                         '(opt ??))))))
-                          (xr--warn warnings item-start (1- idx)
-                                        (if inner-opt
-                                            "Repetition of option"
-                                          "Repetition of repetition"))))
+                          (xr--warn warnings
+                                    item-start (1- idx)
+                                    (if inner-opt
+                                        "Repetition of option"
+                                      "Repetition of repetition")
+                                    (cadr locations) (1- item-start)
+                                    "This is the inner expression")))
                        ((memq operand xr--zero-width-assertions)
-                        (xr--warn warnings item-start (1- idx)
-                                      "Repetition of zero-width assertion"))
+                        (xr--warn warnings
+                                  item-start (1- idx)
+                                  "Repetition of zero-width assertion"
+                                  (cadr locations) (1- item-start)
+                                  "Zero-width assertion here"))
                        ((and (xr--matches-empty-p operand)
                              ;; Rejecting repetition of the empty string
                              ;; suppresses some false positives.
                              (not (equal operand "")))
                         (xr--warn
                          warnings item-start (1- idx)
-                         "Repetition of expression matching an empty string"))))
-
+                         "Repetition of expression matching an empty string"
+                         (cadr locations) (1- item-start)
+                         "This expression matches an empty string"))))
                     (setq sequence (cons (xr--repeat lower upper operand)
                                          (cdr sequence)))
                     (pop locations))))))
@@ -979,9 +1010,9 @@ like (* (* X) ... (* X))."
               ;; Note that we do not warn about \], since the symmetry with \[
               ;; makes it unlikely to be a serious error.
               (xr--warn warnings item-start (1+ item-start)
-                            (format-message "Escaped non-special character `%s'"
-                                            (xr--escape-string
-                                             (char-to-string next-char))))))))
+                        (format-message "Escaped non-special character `%s'"
+                                        (xr--escape-string
+                                         (char-to-string next-char))))))))
 
          ;; nonspecial character
          (t
@@ -998,10 +1029,15 @@ like (* (* X) ... (* X))."
                  (prev-item (cadr sequence))
                  (subsumption (xr--adjacent-subsumption prev-item item)))
             (when subsumption
-              (xr--warn warnings (car locations) (1- idx)
-                            (if (eq subsumption 'a-subsumes-b)
-                                "Repetition subsumed by preceding repetition"
-                              "Repetition subsumes preceding repetition")))
+              (xr--warn warnings
+                        (car locations) (1- idx)
+                        (if (eq subsumption 'a-subsumes-b)
+                            "Repetition subsumed by preceding repetition"
+                          "Repetition subsumes preceding repetition")
+                        (cadr locations) (1- (car locations))
+                        (if (eq subsumption 'a-subsumes-b)
+                            "Subsuming repetition here"
+                          "Subsumed repetition here")))
 
             ;; Check for anchors conflicting with previous/next character.
             ;; To avoid false positives, we require that at least one
@@ -1013,26 +1049,33 @@ like (* (* X) ... (* X))."
                              (or (eq prev-eol 'always)
                                  (eq this-nonl 'always)))
                     (xr--warn
-                     warnings (car locations) (1- idx)
-                     "Non-newline follows end-of-line anchor")))))
+                     warnings
+                     (car locations) (1- idx)
+                     "Non-newline follows end-of-line anchor"
+                     (cadr locations) (1- (car locations))
+                     "This matches at the end of a line")))))
             (let ((this-bol (xr--starts-with-sym 'bol item)))
               (when this-bol
                 (let ((prev-nonl (xr--ends-with-nonl prev-item)))
                   (when (and prev-nonl
                              (or (eq prev-nonl 'always)
                                  (eq this-bol 'always)))
-                    (xr--warn
-                     warnings (car locations) (1- idx)
-                     "Line-start anchor follows non-newline")))))
+                    (xr--warn warnings
+                              (car locations) (1- idx)
+                              "Line-start anchor follows non-newline"
+                              (cadr locations) (1- (car locations))
+                              "This matches a non-newline at the end")))))
             (let ((prev-eos (xr--ends-with-sym 'eos prev-item)))
               (when prev-eos
                 (let ((this-nonempty (xr--matches-nonempty item)))
                   (when (and this-nonempty
                              (or (eq prev-eos 'always)
                                  (eq this-nonempty 'always)))
-                    (xr--warn
-                     warnings (car locations) (1- idx)
-                     "Non-empty pattern follows end-of-text anchor")))))
+                    (xr--warn warnings
+                              (car locations) (1- idx)
+                              "Non-empty pattern follows end-of-text anchor"
+                              (cadr locations) (1- (car locations))
+                              "This matches at the end of the text")))))
 
             ;; FIXME: We don't complain about non-empty followed by
             ;; bos because it may be the start of unmatchable.
@@ -1667,25 +1710,42 @@ A-SETS and B-SETS are arguments to `any'."
       (let ((pos xr--idx)
             (seq (xr--parse-seq warnings purpose checks)))
         (when warnings
-          (cond
-           ((member seq alternatives)
-            (xr--warn warnings pos (1- xr--idx)
-                          "Duplicated alternative branch"))
-           ((xr--some (lambda (branch) (xr--superset-p seq branch))
-                      alternatives)
-            (xr--warn warnings pos (1- xr--idx)
-                          "Branch matches superset of a previous branch"))
-           ((xr--some (lambda (branch) (xr--superset-p branch seq))
-                      alternatives)
-            (xr--warn warnings pos (1- xr--idx)
-                        "Branch matches subset of a previous branch"))
-           ((and (eq checks 'all)
-                 (xr--char-alt-equivalent-p (car alternatives))
-                 (xr--char-alt-equivalent-p seq))
+          (let ((alts alternatives)
+                (locs locations))
+            (while
+                (and alts
+                     (let ((branch (car alts)))
+                       (cond
+                        ((xr--superset-p seq branch)
+                         (let ((duplicate (equal seq branch)))
+                           (xr--warn
+                            warnings
+                            pos (1- xr--idx)
+                            (if duplicate
+                                "Duplicated alternative branch"
+                              "Branch matches superset of a previous branch")
+                            (cadr locs) (- (car locs) 3)
+                            (if duplicate
+                                "Previous occurrence here"
+                              "This is the subset branch"))
+                           nil))
+                        ((xr--superset-p branch seq)
+                         (xr--warn warnings
+                                   pos (1- xr--idx)
+                                   "Branch matches subset of a previous branch"
+                                   (cadr locs) (- (car locs) 3)
+                                   "This is the superset branch")
+                         nil)
+                        (t t))))
+              (setq locs (cdr locs))
+              (setq alts (cdr alts))))
+          (when (and (eq checks 'all)
+                     (xr--char-alt-equivalent-p (car alternatives))
+                     (xr--char-alt-equivalent-p seq))
             (xr--warn
              warnings (nth 1 locations) (1- xr--idx)
              "Or-pattern more efficiently expressed as character alternative"))
-           ))
+           )
         (push seq alternatives)))
     (if (cdr alternatives)
         ;; Simplify (or nonl "\n") to anything
@@ -1716,6 +1776,16 @@ A-SETS and B-SETS are arguments to `any'."
 ;; negated  ::= `^'
 ;;
 ;; Ambiguities in the above are resolved greedily left-to-right.
+
+(defun xr--skip-set-warn (warnings string start is-range format &rest args)
+  (let* ((beg start)
+         (end (if is-range (+ beg 2) beg)))
+    (when (eq (aref string beg) ?\\)
+      (setq end (1+ end)))
+    (when (and is-range (eq (aref string end) ?\\))
+      (setq end (1+ end)))
+    (xr--warn warnings beg end
+              (xr--escape-string (apply #'format-message format args)))))
 
 (defun xr--parse-skip-set (string warnings)
 
@@ -1864,46 +1934,36 @@ A-SETS and B-SETS are arguments to `any'."
                  ;; Duplicate character: drop it and warn.
                  ((and (eq (aref a 0) (aref a 1))
                        (eq (aref b 0) (aref b 1)))
-                  (xr--warn warnings (aref b 2) (aref b 2)
-                                (xr--escape-string
-                                 (format-message
-                                  "Duplicated character `%c'" (aref this 0)))))
+                  (xr--skip-set-warn warnings string (aref b 2) nil
+                                     "Duplicated character `%c'" (aref this 0)))
                  ;; Duplicate range: drop it and warn.
                  ((and (eq (aref a 0) (aref b 0))
                        (eq (aref a 1) (aref b 1)))
-                  (xr--warn warnings (aref b 2) (+ (aref b 2) 2)
-                                (xr--escape-string
-                                 (format-message
-                                  "Duplicated range `%c-%c'"
-                                  (aref b 0) (aref b 1)))))
+                  (xr--skip-set-warn warnings string (aref b 2) t
+                                     "Duplicated range `%c-%c'"
+                                     (aref b 0) (aref b 1)))
                  ;; Character in range: drop it and warn.
                  ((eq (aref a 0) (aref a 1))
                   (when (eq a this)
                     (setcar s next))
-                  (xr--warn warnings (aref b 2) (+ (aref b 2) 2)
-                                (xr--escape-string
-                                 (format-message
-                                  "Range `%c-%c' includes character `%c'"
-                                  (aref b 0) (aref b 1) (aref a 0)))))
+                  (xr--skip-set-warn warnings string (aref b 2) t
+                                     "Range `%c-%c' includes character `%c'"
+                                     (aref b 0) (aref b 1) (aref a 0)))
                  ;; Same but other way around.
                  ((eq (aref b 0) (aref b 1))
                   (when (eq b this)
                     (setcar s next))
-                  (xr--warn warnings (aref b 2) (aref b 2)
-                                (xr--escape-string
-                                 (format-message
-                                  "Character `%c' included in range `%c-%c'"
-                                  (aref b 0) (aref a 0) (aref a 1)))))
+                  (xr--skip-set-warn warnings string (aref b 2) nil
+                                     "Character `%c' included in range `%c-%c'"
+                                     (aref b 0) (aref a 0) (aref a 1)))
                  ;; Overlapping ranges: merge and warn.
                  (t
                   (let ((this-end (aref this 1)))
                     (aset this 1 (max (aref this 1) (aref next 1)))
-                    (xr--warn warnings (aref b 2) (+ (aref b 2) 2)
-                                  (xr--escape-string
-                                   (format-message
-                                    "Ranges `%c-%c' and `%c-%c' overlap"
-                                    (aref this 0) this-end
-                                    (aref next 0) (aref next 1)))))))
+                    (xr--skip-set-warn warnings string (aref b 2) t
+                                       "Ranges `%c-%c' and `%c-%c' overlap"
+                                       (aref this 0) this-end
+                                       (aref next 0) (aref next 1)))))
                 (setcdr s (cddr s)))
             ;; No overlap.
             (setq s (cdr s)))))
