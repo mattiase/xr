@@ -4,7 +4,7 @@
 
 ;; Author: Mattias Engdegård <mattiase@acm.org>
 ;; Version: 1.25
-;; Package-Requires: ((emacs "26.1"))
+;; Package-Requires: ((emacs "27.1"))
 ;; URL: https://github.com/mattiase/xr
 ;; Keywords: lisp, regexps
 
@@ -2148,9 +2148,7 @@ about the same problem."
   "Escape non-printing characters in a string for maximum readability.
 If ESCAPE-PRINTABLE, also escape \\ and \", otherwise don't."
   (replace-regexp-in-string
-   ;; We don't use rx here because of bugs in dealing with raw chars
-   ;; prior to Emacs 27.1.
-   "[\x00-\x1f\"\\\x7f\x80-\xff][[:xdigit:]]?"
+   (rx (in "\x00-\x1f" "\x80-\xff" ?\" ?\\ #x7f) (? xdigit))
    (lambda (s)
      (let* ((c (logand (string-to-char s) #xff))
             (xdigit (substring s 1))
