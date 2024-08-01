@@ -1,6 +1,25 @@
                           xr version history
                           ==================
 
+Version 2.0
+
+- Compatibility break: `xr-lint` and `xr-skip-set-lint` now return a
+  two-level list of diagnostics, each of which now include an endpoint
+  and severity field. The diagnostics are grouped so that messages
+  that apply to the same problem are in the same middle-level list.
+
+- Most warnings are now accompanied by info-level messages that point out
+  related parts of the input string.
+
+- `xr-lint` and `xr-skip-set-lint` no longer signal errors for invalid
+  syntax; they are now returned as error-level messages. Other
+  functions such as `xr` now signal `xr-parse-error` when the input
+  string contains something that Emacs would not accept.
+
+- Emacs version 27 or later now required
+
+- Further performance improvements
+
 Version 1.25
 - Effective repetition of repetition check now always enabled
 - Some performance improvements
