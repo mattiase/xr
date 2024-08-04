@@ -78,6 +78,15 @@ END is nil if unknown."
        (setq list (cdr list)))
      (not list)))
 
+(eval-when-compile
+  (defconst xr--char-classes '( ascii alnum alpha blank cntrl digit graph
+                                lower multibyte nonascii print punct space
+                                unibyte upper word xdigit)))
+
+(pcase-defmacro xr--char-class ()
+  "Match any standard regexp char class as a symbol."
+  `(or ,@(mapcar (lambda (x) `(quote ,x)) xr--char-classes)))
+
 (defvar xr--string)
 (defvar xr--len)
 (defvar xr--idx)
@@ -118,11 +127,7 @@ END is nil if unknown."
              (let ((i (xr--string-search ":]" string (+ 2 idx))))
                (and i
                     (let ((sym (intern (substring string (+ idx 2) i))))
-                      (unless
-                          (memq sym
-                                '( ascii alnum alpha blank cntrl digit graph
-                                   lower multibyte nonascii print punct space
-                                   unibyte upper word xdigit))
+                      (unless (memq sym (eval-when-compile xr--char-classes))
                         (xr--error idx (1+ i)
                                    "No character class `[:%s:]'"
                                    (symbol-name sym)))
@@ -1162,10 +1167,7 @@ nil if RX only matches the empty string."
          (and (xr--some #'xr--matches-nonempty body) 'sometimes)
        (xr--tristate-some #'xr--matches-nonempty body)))
     (`(,(or 'any 'not 'intersection 'syntax 'category) . ,_) 'always)
-    ((or 'ascii 'alnum 'alpha 'blank 'cntrl 'digit 'graph
-         'lower 'multibyte 'nonascii 'print 'punct 'space
-         'unibyte 'upper 'word 'xdigit
-         'nonl 'anything)
+    ((or 'nonl 'anything (xr--char-class))
      'always)))
 
 (defun xr--starts-with-sym (symbol item)
@@ -1490,14 +1492,9 @@ A-SETS and B-SETS are arguments to `any'."
     (`(not (any . ,b-sets))
      (and negated
           (xr--char-superset-of-char-set-p b-sets nil sets)))
-    ((or 'ascii 'alnum 'alpha 'blank 'cntrl 'digit 'graph
-         'lower 'multibyte 'nonascii 'print 'punct 'space
-         'unibyte 'upper 'word 'xdigit)
+    ((xr--char-class)
      (xr--char-superset-of-char-set-p sets negated (list rx)))
-    (`(not ,(and sym
-                 (or 'ascii 'alnum 'alpha 'blank 'cntrl 'digit 'graph
-                     'lower 'multibyte 'nonascii 'print 'punct 'space
-                     'unibyte 'upper 'word 'xdigit)))
+    (`(not ,(and sym (xr--char-class)))
      (and negated
           (xr--char-superset-of-char-set-p (list sym) nil sets)))
     ((pred characterp)
@@ -1513,11 +1510,9 @@ A-SETS and B-SETS are arguments to `any'."
 
 (defun xr--single-char-p (rx)
   "Whether RX only matches single characters."
-  (or (memq rx '(nonl anything
-                 ascii alnum alpha blank cntrl digit graph
-                 lower multibyte nonascii print punct space
-                 unibyte upper word xdigit
-                 wordchar not-wordchar))
+  (or (memq rx (eval-when-compile
+                 (append '(nonl anything wordchar not-wordchar)
+                         xr--char-classes)))
       (characterp rx)
       (and (consp rx)
            (or (memq (car rx) '(any category syntax))
@@ -1605,10 +1600,7 @@ A-SETS and B-SETS are arguments to `any'."
                        (and (characterp b)
                             (string-match-p (rx-to-string a)
                                             (char-to-string b)))))
-                  ((memq a-not-arg
-                         '( ascii alnum alpha blank cntrl digit graph
-                            lower multibyte nonascii print punct space
-                            unibyte upper word xdigit))
+                  ((memq a-not-arg (eval-when-compile xr--char-classes))
                    (xr--char-superset-of-rx-p (list a-not-arg) t b))
                   (t (equal a b)))))
 
@@ -1661,9 +1653,7 @@ A-SETS and B-SETS are arguments to `any'."
 
          (t (equal a b)))))
 
-     ((memq a '( ascii alnum alpha blank cntrl digit graph
-                 lower multibyte nonascii print punct space
-                 unibyte upper word xdigit))
+     ((memq a (eval-when-compile xr--char-classes))
       (xr--char-superset-of-rx-p (list a) nil b))
 
      ((eq a 'nonl) (xr--single-non-newline-char-p b))
@@ -1685,10 +1675,7 @@ A-SETS and B-SETS are arguments to `any'."
   ;; `or'-expressions to make an `any' form.
   (pcase x
     ((pred stringp) (= (length x) 1))
-    ((or 'ascii 'alnum 'alpha 'blank 'cntrl 'digit 'graph
-         'lower 'multibyte 'nonascii 'print 'punct 'space
-         'unibyte 'upper 'word 'xdigit
-         'anything)
+    ((or (xr--char-class) 'anything)
      t)
     (`(any . ,_) t)
     ;; Assume for this purpose that \sw and \s- are equivalent to
@@ -1822,11 +1809,7 @@ A-SETS and B-SETS are arguments to `any'."
            (let ((i (xr--string-search ":]" string (+ 2 idx))))
              (and i
                   (let ((sym (intern (substring string (+ idx 2) i))))
-                    (unless
-                        (memq sym
-                              '( ascii alnum alpha blank cntrl digit graph
-                                 lower multibyte nonascii print punct space
-                                 unibyte upper word xdigit))
+                    (unless (memq sym (eval-when-compile xr--char-classes))
                       (xr--error idx (1+ i)
                                  "No character class `[:%s:]'"
                                  (symbol-name sym)))
