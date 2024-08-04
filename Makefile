@@ -2,7 +2,7 @@ EMACS=emacs
 EMFLAGS=-Q -batch -L .
 BYTECOMPFLAGS=--eval '(setq byte-compile-error-on-warn t)'
 
-EL=$(wildcard *.el)
+EL = xr.el xr-test.el
 ELC=$(EL:.el=.elc)
 
 .PHONY: build check clean
