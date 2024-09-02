@@ -811,6 +811,47 @@
      (equal (xr-lint "[ab]?\\|a?")
             '(((7 8 "Branch matches subset of a previous branch" warning)
                (0 4 "This is the superset branch" info)))))
+
+    (should
+     (equal (xr-lint "a*\\|")
+            '(((4 nil "Branch matches subset of a previous branch" warning)
+               (0 1 "This is the superset branch" info)))))
+    (should
+     (equal (xr-lint "\\|a*")
+            '(((2 3 "Branch matches superset of a previous branch" warning)
+               (0 nil "This is the subset branch" info)))))
+    (should
+     (equal (xr-lint "a?\\|")
+            '(((4 nil "Branch matches subset of a previous branch" warning)
+               (0 1 "This is the superset branch" info)))))
+    (should
+     (equal (xr-lint "\\|a?")
+            '(((2 3 "Branch matches superset of a previous branch" warning)
+               (0 nil "This is the subset branch" info)))))
+    (should
+     (equal (xr-lint "a*?\\|")
+            '(((5 nil "Branch matches subset of a previous branch" warning)
+               (0 2 "This is the superset branch" info)))))
+    (should
+     (equal (xr-lint "\\|a*?")
+            '(((2 4 "Branch matches superset of a previous branch" warning)
+               (0 nil "This is the subset branch" info)))))
+    (should
+     (equal (xr-lint "a??\\|")
+            '(((5 nil "Branch matches subset of a previous branch" warning)
+               (0 2 "This is the superset branch" info)))))
+    (should
+     (equal (xr-lint "\\|a??")
+            '(((2 4 "Branch matches superset of a previous branch" warning)
+               (0 nil "This is the subset branch" info)))))
+    (should
+     (equal (xr-lint "a\\{0,4\\}\\|")
+            '(((10 nil "Branch matches subset of a previous branch" warning)
+               (0 7 "This is the superset branch" info)))))
+    (should
+     (equal (xr-lint "\\|a\\{0,4\\}")
+            '(((2 9 "Branch matches superset of a previous branch" warning)
+               (0 nil "This is the subset branch" info)))))
     ))
 
 (ert-deftest xr-lint-subsumed-repetition ()

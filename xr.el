@@ -1618,26 +1618,29 @@ A-SETS and B-SETS are arguments to `any'."
          ((eq a-op 'or)
           (xr--some (lambda (a-expr) (xr--superset-p a-expr b)) a-body))
 
-         ((eq a-op 'zero-or-more)
-          (if (memq (car-safe b) '(opt zero-or-more one-or-more))
+         ((memq a-op '(zero-or-more *?))
+          (if (memq (car-safe b) '(opt zero-or-more one-or-more ?? *? +?))
+            (let ((b-body (cdr b)))
+              (xr--superset-p (xr--make-seq a-body) (xr--make-seq b-body)))
+            (or (equal b '(seq))
+                (xr--superset-p (xr--make-seq a-body) b))))
+         ((memq a-op '(one-or-more +?))
+          (if (memq (car-safe b) '(one-or-more +?))
               (let ((b-body (cdr b)))
                 (xr--superset-p (xr--make-seq a-body) (xr--make-seq b-body)))
             (xr--superset-p (xr--make-seq a-body) b)))
-         ((eq a-op 'one-or-more)
-          (if (eq (car-safe b) 'one-or-more)
-              (let ((b-body (cdr b)))
-                (xr--superset-p (xr--make-seq a-body) (xr--make-seq b-body)))
-            (xr--superset-p (xr--make-seq a-body) b)))
-         ((eq a-op 'opt)
-          (if (eq (car-safe b) 'opt)
-              (let ((b-body (cdr b)))
-                (xr--superset-p (xr--make-seq a-body) (xr--make-seq b-body)))
-            (xr--superset-p (xr--make-seq a-body) b)))
+         ((memq a-op '(opt ??))
+          (if (memq (car-safe b) '(opt ??))
+            (let ((b-body (cdr b)))
+              (xr--superset-p (xr--make-seq a-body) (xr--make-seq b-body)))
+            (or (equal b '(seq))
+                (xr--superset-p (xr--make-seq a-body) b))))
          ((eq a-op 'repeat)
           (let ((lo (car a-body))
                 (a-body (cddr a-body)))
             (if (<= lo 1)
-                (xr--superset-p (xr--make-seq a-body) b)
+                (or (and (= lo 0) (equal b '(seq)))
+                    (xr--superset-p (xr--make-seq a-body) b))
               (equal a b))))
          
          ;; We do not expand through groups on the subset (b) side to
@@ -1704,26 +1707,31 @@ A-SETS and B-SETS are arguments to `any'."
                      (let ((branch (car alts)))
                        (cond
                         ((xr--superset-p seq branch)
-                         (let ((duplicate (equal seq branch)))
+                         (let ((duplicate (equal seq branch))
+                               (prev-beg (cadr locs))
+                               (prev-end (- (car locs) 3)))
                            (xr--warn
                             warnings
-                            pos (1- xr--idx)
+                            pos (and (< pos xr--idx) (1- xr--idx))
                             (if duplicate
                                 "Duplicated alternative branch"
                               "Branch matches superset of a previous branch")
-                            (cadr locs) (- (car locs) 3)
+                            prev-beg (and (>= prev-end prev-beg) prev-end)
                             (if duplicate
                                 "Previous occurrence here"
                               "This is the subset branch"))
                            nil))
                         ((xr--superset-p branch seq)
-                         (xr--warn warnings
-                                   pos (1- xr--idx)
-                                   "Branch matches subset of a previous branch"
-                                   (cadr locs) (- (car locs) 3)
-                                   "This is the superset branch")
-                         nil)
-                        (t t))))
+                         (let ((prev-beg (cadr locs))
+                               (prev-end (- (car locs) 3)))
+                           (xr--warn
+                            warnings
+                            pos (and (< pos xr--idx) (1- xr--idx))
+                            "Branch matches subset of a previous branch"
+                            prev-beg (and (>= prev-end prev-beg) prev-end)
+                            "This is the superset branch")
+                           nil))
+                         (t t))))
               (setq locs (cdr locs))
               (setq alts (cdr alts))))
           (when (and (eq checks 'all)
