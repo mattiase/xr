@@ -390,7 +390,8 @@ adjacent strings. SEQUENCE is used destructively."
             (rest (cdr sequence)))
         (setq sequence
               (cond ((stringp elem)
-                     (push elem strings)
+                     (unless (equal elem "")
+                       (push elem strings))
                      rest)
                     ((eq (car-safe elem) 'seq)
                      (nconc (nreverse (cdr elem)) rest))

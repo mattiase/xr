@@ -96,6 +96,8 @@
                        symbol-start symbol-end eol)))
   (should (equal (xr-test--error (xr "\\_a"))
                  '(xr-parse-error "Invalid \\_ sequence" 0 2)))
+  (should (equal (xr "^\\(?:\\(?:\\)\\(?:\\)\\).$")
+                 '(seq bol nonl eol)))
   )
 
 (ert-deftest xr-syntax ()
