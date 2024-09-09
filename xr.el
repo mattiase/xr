@@ -346,6 +346,8 @@ END is nil if unknown."
                (null classes))
           'anything)
          ;; Non-negated single-char set, like [$]: make a string.
+         ;; FIXME: Translate [^a] to (not "a") instead of (not (any "a")),
+         ;; the latter only required for use in Emacs 26 and older.
          ((and (= (length chars) 1)
                (not negated)
                (null ranges)
