@@ -1,6 +1,13 @@
                           xr version history
                           ==================
 
+Version 2.1
+
+- Elide useless empty strings in translation to xr. For example,
+  translate ^\(?:\) to bol instead of (seq bol "").
+
+- Better empty string subset/superset check
+
 Version 2.0
 
 - Compatibility break: `xr-lint` and `xr-skip-set-lint` now return a
