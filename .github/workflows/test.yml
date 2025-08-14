@@ -28,7 +28,7 @@ jobs:
           version: ${{matrix.emacs_version}}
 
       - name: Check out xr
-        uses: actions/checkout@v4
+        uses: actions/checkout@v5
 
       - name: Byte-compile
         run: make build
