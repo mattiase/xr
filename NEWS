@@ -1,6 +1,10 @@
                           xr version history
                           ==================
 
+Version 2.2
+
+- Detect [:CLASS] (missing colon) in regexps and skip-sets.
+
 Version 2.1
 
 - Elide useless empty strings in translation to xr. For example,
