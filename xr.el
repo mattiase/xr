@@ -3,7 +3,7 @@
 ;; Copyright (C) 2019-2026 Free Software Foundation, Inc.
 
 ;; Author: Mattias Engdegård <mattias.engdegard@gmail.com>
-;; Version: 2.1
+;; Version: 2.2
 ;; Package-Requires: ((emacs "27.1"))
 ;; URL: https://github.com/mattiase/xr
 ;; Keywords: lisp, regexps
