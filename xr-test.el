@@ -518,6 +518,9 @@
     (should (equal (xr-lint "[a[:digit:]b[:punct:]c[:digit:]]")
                    '(((22 30 "Duplicated character class `[:digit:]'" warning)
                       (2 10 "Previous occurrence here" info)))))
+    (should
+     (equal (xr-lint "[+[:alnum]][b[:x]]")
+            '(((2 9 "Possibly missing `:' after character class" warning)))))
     (should (equal (xr-lint "[0-9[|]*/]")
                    '(((4 4 "Suspect `[' in char alternative" warning)))))
     (should (equal (xr-lint "[^][-].]")
@@ -1154,6 +1157,11 @@
     (should (equal (xr-skip-set-lint "[[:space:]].")
                    '(((0 10 "Suspect character class framed in `[...]'"
                          warning)))))
+    (should
+     (equal (xr-skip-set-lint "_[:alnum]")
+            '(((1 8 "Possibly missing `:' after character class" warning)))))
+    (should (equal (xr-skip-set-lint "_[:ab]")
+                   nil))
     (should (equal (xr-skip-set-lint "")
                    '(((0 nil "Empty set matches nothing" warning)))))
     (should (equal (xr-skip-set-lint "^")
