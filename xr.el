@@ -130,12 +130,11 @@ END is nil if unknown."
              (eq (aref string (1+ idx)) ?:)
              (let ((i (xr--string-search ":]" string (+ 2 idx))))
                (if i
-                   ;; FIXME: don't pollute the standard obarray
-                   (let ((sym (intern (substring string (+ idx 2) i))))
+                   (let* ((name (substring string (+ idx 2) i))
+                          (sym (intern-soft name)))
                      (unless (memq sym (eval-when-compile xr--char-classes))
                        (xr--error idx (1+ i)
-                                  "No character class `[:%s:]'"
-                                  (symbol-name sym)))
+                                  "No character class `[:%s:]'" name))
                      (let ((prev (assq sym classes)))
                        (if prev
                            (let* ((prev-beg (cdr prev))
@@ -1834,11 +1833,11 @@ A-SETS and B-SETS are arguments to `any'."
            (eq (aref string (1+ idx)) ?:)
            (let ((i (xr--string-search ":]" string (+ 2 idx))))
              (if i
-                  (let ((sym (intern (substring string (+ idx 2) i))))
+                 (let* ((name (substring string (+ idx 2) i))
+                        (sym (intern-soft name)))
                     (unless (memq sym (eval-when-compile xr--char-classes))
                       (xr--error idx (1+ i)
-                                 "No character class `[:%s:]'"
-                                 (symbol-name sym)))
+                                 "No character class `[:%s:]'" name))
                     ;; Another useful ad-hoc check.
                     (when (and (> idx 0)
                                (eq (aref string (1- idx)) ?\[)
